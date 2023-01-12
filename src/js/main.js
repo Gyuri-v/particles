@@ -8,7 +8,12 @@ const App = function () {
   let canvas, renderer, scene, camera, light, controls;
   let isRequestRender = false;
   let isAnimation = false;
-  let currentShape;
+  let currentShape = 'pumpkin';
+
+  const pointArrays = { pumkin: null, duck: null };
+  let particles;
+
+  let maxPointsNum = 0;
 
   const $container = document.querySelector('.container');
   const $btnChange = $container.querySelector('.btn-ani');
@@ -50,115 +55,117 @@ const App = function () {
     // Render
     renderRequest();
     render();
+
+    // Loading
+    THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
+      if (itemsLoaded === itemsTotal) {
+        setArrayValuesToSameNum();
+        setParticles();
+      }
+    };
   };
 
   const resize = function () {
     //
   };
 
-  const randomArray = [];
-  const pumpkinGeoArrays = [];
-  let pumpkinGeoPoints;
-  const foxGeoArrays = [];
-  let foxGeoPoints;
-  let randomPoints;
-  let points;
-
+  // Setting -------------------
   const setModels = function () {
-    let geometry = new THREE.BufferGeometry();
-    let material = new THREE.PointsMaterial({
-      size: 1,
-      sizeAttenuation: false,
-    });
-
     const gltfLoader = new GLTFLoader();
+
     gltfLoader.load('./resources/models/pumpkin.glb', (gltf) => {
       const model = gltf.scene.children[0];
-
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          const geometryArray = Array.from(child.geometry.attributes.position.array);
-          pumpkinGeoArrays.push(geometryArray);
-        }
-      });
-
-      pumpkinGeoPoints = pumpkinGeoArrays.reduce((acc, cur) => {
-        return acc.concat(cur);
-      });
-      pumpkinGeoPoints = new Float32Array(pumpkinGeoPoints);
-      const pumpkinGeoPointsCopy = pumpkinGeoPoints.slice();
-      console.log(pumpkinGeoPoints);
-
-      for (let i = 0; i < pumpkinGeoPoints.length; i++) {
-        randomArray.push((Math.random() - 0.5) * 100);
-      }
-      randomPoints = new Float32Array(randomArray);
-
-      currentShape = 'pumpkin';
-      geometry.setAttribute('position', new THREE.BufferAttribute(pumpkinGeoPointsCopy, 3));
-      points = new THREE.Points(geometry, material);
-      points.rotation.x = -Math.PI / 2;
-      points.position.y = 10;
-
-      // scene.add(model);
-      scene.add(points);
-      renderRequest();
+      pointArrays.pumkin = getModelGeoPositionArray(model);
     });
 
     gltfLoader.load('./resources/models/duck.glb', (gltf) => {
       const model = gltf.scene.children[0];
-      model.scale.set(0.3, 0.3, 0.3);
-      model.position.y = -10;
-
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          const geometryArray = Array.from(child.geometry.attributes.position.array);
-          foxGeoArrays.push(geometryArray);
-        }
-      });
-
-      foxGeoPoints = foxGeoArrays.reduce((acc, cur) => {
-        return acc.concat(cur);
-      });
-      foxGeoPoints = new Float32Array(foxGeoPoints);
-      console.log(foxGeoPoints);
-      // const foxGeoPointsCopy = foxGeoPoints.slice();
-
-      // geometry.setAttribute('position', new THREE.BufferAttribute(foxGeoPointsCopy, 3));
-      // points = new THREE.Points(geometry, material);
-      // points.rotation.x = -Math.PI / 2;
-      // points.position.y = 10;
-
-      // scene.add(model);
-      // scene.add(points);
+      const geometry = model.children[1].geometry;
+      geometry.scale(0.15, 0.15, 0.15);
+      geometry.rotateY(Math.PI);
+      geometry.translate(0, 0, -20);
+      pointArrays.duck = getModelGeoPositionArray(model);
     });
   };
 
-  // const setParticles = function () {
-  // }
+  const setParticles = function () {
+    const material = new THREE.PointsMaterial({ constize: 1, sizeAttenuation: false });
+    const geometry = new THREE.BufferGeometry();
+    const geometryPoints = pointArrays.pumkin.slice();
+    geometry.setAttribute('position', new THREE.BufferAttribute(geometryPoints, 3));
 
+    particles = new THREE.Points(geometry, material);
+    particles.rotation.x = -Math.PI / 2;
+    particles.position.y = 10;
+
+    scene.add(particles);
+    renderRequest();
+  };
+
+  const setArrayValuesToSameNum = function () {
+    for (const key in pointArrays) {
+      if (Object.hasOwnProperty.call(pointArrays, key)) {
+        const item = pointArrays[key];
+
+        if (item.length < maxPointsNum) {
+          const originArray = Array.from(item);
+          let newArray;
+
+          const magnification = Math.ceil(maxPointsNum / item.length);
+          for (let i = 0; i < magnification - 1; i++) {
+            i === 0 ? (newArray = originArray.concat(originArray)) : (newArray = newArray.concat(originArray));
+          }
+          // 근데 많아지는 단점
+
+          pointArrays[key] = new Float32Array(newArray);
+        }
+      }
+    }
+  };
+
+  // Get -------------------
+  const getModelGeoPositionArray = function (model, pointsArray) {
+    let geoArrays = [];
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const geometryArray = Array.from(child.geometry.attributes.position.array);
+        geoArrays.push(geometryArray);
+      }
+    });
+
+    pointsArray = geoArrays.reduce((acc, cur) => {
+      return acc.concat(cur);
+    });
+    pointsArray = new Float32Array(pointsArray);
+
+    maxPointsNum = pointsArray.length > maxPointsNum ? pointsArray.length : maxPointsNum;
+
+    return pointsArray;
+  };
+
+  // Change -------------------
   const changeParticles = function () {
     isAnimation = true;
 
     if (currentShape == 'pumpkin') {
-      currentShape = 'random';
+      currentShape = 'duck';
 
-      gsap.to(points.geometry.attributes.position.array, {
-        endArray: foxGeoPoints,
+      gsap.to(particles.geometry.attributes.position.array, {
+        endArray: pointArrays.duck,
         duration: 1,
         onUpdate: () => {
-          points.geometry.attributes.position.needsUpdate = true;
+          particles.geometry.attributes.position.needsUpdate = true;
           renderRequest();
         },
       });
-    } else if (currentShape == 'random') {
+    } else if (currentShape == 'duck') {
       currentShape = 'pumpkin';
 
-      gsap.to(points.geometry.attributes.position.array, {
-        endArray: pumpkinGeoPoints,
+      gsap.to(particles.geometry.attributes.position.array, {
+        endArray: pointArrays.pumkin,
         duration: 1,
         onUpdate: () => {
-          points.geometry.attributes.position.needsUpdate = true;
+          particles.geometry.attributes.position.needsUpdate = true;
           renderRequest();
         },
       });
