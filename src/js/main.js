@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import gsap from 'gsap';
 import dat from 'dat.gui';
@@ -18,12 +19,7 @@ const App = function () {
   let particlesPositions;
 
   const $container = document.querySelector('.container');
-  const $btnChange = $container.querySelector('.btn-ani');
   let $canvas;
-
-  let catBox;
-  let catSize = new THREE.Vector3();
-  let catOffset;
 
   const init = function () {
     // Window
@@ -68,7 +64,6 @@ const App = function () {
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        setArrayValuesToSameNum();
         setParticles();
         setParticlesAnimation();
 
@@ -85,8 +80,17 @@ const App = function () {
   const setModels = function () {
     const gltfLoader = new GLTFLoader();
 
-    gltfLoader.load('./resources/models/pumpkin.glb', (gltf) => {
+    gltfLoader.load('./resources/models/pumpkin2.glb', (gltf) => {
       const model = gltf.scene.children[0];
+      let geometry, mesh;
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          mesh = child;
+          geometry = child.geometry;
+        }
+      });
+      geometry.rotateX(THREE.MathUtils.degToRad(10));
+      geometry.translate(0, 0, -20);
       pointArrays.pumkin = getModelGeoPositionArray(model);
     });
 
@@ -99,14 +103,8 @@ const App = function () {
           geometry = child.geometry;
         }
       });
-      // geometry.scale(0.8, 0.8, 0.8);
       geometry.rotateX(THREE.MathUtils.degToRad(90));
-      // geometry.rotateY(THREE.MathUtils.degToRad(10));
       geometry.rotateZ(THREE.MathUtils.degToRad(-60));
-      // geometry.translate(0, 0, -30);
-
-      catBox = new THREE.Box3().setFromObject(mesh);
-      catSize = catBox.getSize(catSize);
 
       pointArrays.cat = getModelGeoPositionArray(model);
     });
@@ -121,88 +119,19 @@ const App = function () {
 
           geometry.scale(4, 4, 4);
           geometry.rotateX(THREE.MathUtils.degToRad(90));
-          // geometry.rotateY(THREE.MathUtils.degToRad(0));
           geometry.rotateZ(THREE.MathUtils.degToRad(115));
           geometry.translate(-5, 0, 0);
         }
       });
       pointArrays.bird = getModelGeoPositionArray(model);
     });
-
-    gltfLoader.load('./resources/models/bird2.glb', (gltf) => {
-      const model = gltf.scene.children[0];
-      let geometry, mesh;
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          mesh = child;
-          geometry = child.geometry;
-
-          geometry.scale(10, 10, 10);
-          geometry.rotateX(THREE.MathUtils.degToRad(90));
-          geometry.rotateY(THREE.MathUtils.degToRad(10));
-          geometry.rotateZ(THREE.MathUtils.degToRad(20));
-          geometry.translate(-2, 0, 3);
-        }
-      });
-      pointArrays.bird = getModelGeoPositionArray(model);
-    });
-  };
-
-  const setArrayValuesToSameNum = function () {
-    for (const key in pointArrays) {
-      if (Object.hasOwnProperty.call(pointArrays, key)) {
-        const item = pointArrays[key];
-
-        if (item.length < maxPointsNum) {
-          const originArray = Array.from(item);
-          let newArray = originArray.slice();
-
-          // 몇배 많으면 배율하고
-          const mag = Math.floor(maxPointsNum / item.length);
-          if (mag > 1) {
-            for (let i = 0; i < mag - 1; i++) {
-              newArray = newArray.concat(originArray);
-            }
-          }
-
-          // 나머지 갭만큼 추가 ㅠ_ㅠ
-          const gap = maxPointsNum - newArray.length;
-          for (let i = 0; i < gap; i++) {
-            newArray.push(originArray[i]);
-          }
-
-          pointArrays[key] = new Float32Array(newArray);
-        }
-
-        // const pointArray = Array.from(pointArrays[key]);
-        // const pointArrayAsc = pointArray.slice().sort((a, b) => {
-        //   return a - b;
-        // });
-        // const pointArrayDes = pointArray.slice().sort((a, b) => {
-        //   return b - a;
-        // });
-        // console.log('111', pointArrayAsc, '222', pointArrayDes);
-
-        // console.log(pointArray.length);
-        // for (let i = 0; i < 900; i++) {
-        //   // console.log(i, pointArrays[key][i]);
-        //   // const index = 3 * i;
-
-        //   if (i % 3 === 1) {
-        //     console.log(i);
-        //     // pointArray.push(pointArrayAsc[i] + Math.random() * 10);
-        //   }
-        // }
-        // console.log(pointArray.length);
-      }
-    }
   };
 
   const setParticles = function () {
     const material = new THREE.PointsMaterial({ size: 1.5, constize: 1, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending });
     const geometry = new THREE.BufferGeometry();
 
-    const colorInside = new THREE.Color('#7d9be6');
+    const colorInside = new THREE.Color('#fff');
     const colorOutside = new THREE.Color('#001d67');
 
     const positions = pointArrays.pumkin.slice();
@@ -230,37 +159,15 @@ const App = function () {
   };
 
   const setParticlesAnimation = function () {
-    const cameraPosition = camera.position.clone();
-    const cameraLookAt = new THREE.Vector3(0, 0, 0);
-
     particlesPositions = particles.geometry.attributes.position.array;
-    particlesTween = gsap.timeline({
-      paused: true,
-      onUpdate: () => {
-        particles.geometry.attributes.position.needsUpdate = true;
-        renderRequest();
-      },
-    });
-    particlesTween.to(particlesPositions, { endArray: pointArrays.cat }, 'aaa');
-    particlesTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'aaa');
-    particlesTween.to(particlesPositions, { endArray: pointArrays.bird }, 'bbb');
-    particlesTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'bbb');
-    // particlesTween.to(
-    //   cameraLookAt,
-    //   {
-    //     x: -30,
-    //     y: catSize.y,
-    //     onUpdate: () => {
-    //       camera.lookAt(0, cameraLookAt.y, 0);
-    //     },
-    //   },
-    //   'aaa',
-    // );
+    particlesTween = gsap.timeline({ paused: true });
+    particlesTween.to(particlesPositions, { endArray: pointArrays.cat }, 'toCat');
+    particlesTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
+    particlesTween.to(particlesPositions, { endArray: pointArrays.bird }, 'toBird');
+    particlesTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
 
     window.addEventListener('scroll', requestScroll);
   };
-
-  // Change -------------------
 
   // Scroll -------------------
   const requestScroll = function () {
@@ -278,23 +185,24 @@ const App = function () {
   };
 
   // Get -------------------
-  const getModelGeoPositionArray = function (model, pointsArray) {
-    let geoArrays = [];
-    model.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        const geometryArray = Array.from(child.geometry.attributes.position.array);
-        geoArrays.push(geometryArray);
+  const getModelGeoPositionArray = function (model) {
+    const tempPosition = new THREE.Vector3();
+    const points = [];
+
+    let sampler;
+    model.traverse((obj) => {
+      if (obj.isMesh) {
+        sampler = new MeshSurfaceSampler(obj).build();
       }
     });
 
-    pointsArray = geoArrays.reduce((acc, cur) => {
-      return acc.concat(cur);
-    });
-    pointsArray = new Float32Array(pointsArray);
+    for (let i = 0; i < 20000; i++) {
+      sampler.sample(tempPosition);
+      points.push(tempPosition.x, tempPosition.y, tempPosition.z);
+    }
 
-    maxPointsNum = pointsArray.length > maxPointsNum ? pointsArray.length : maxPointsNum;
-
-    return pointsArray;
+    const pointArray = new Float32Array(points, 3);
+    return pointArray;
   };
 
   // Render -------------------
@@ -306,6 +214,7 @@ const App = function () {
     if (scrollPercent.toFixed(6) !== scrollPercentAcc.toFixed(6)) {
       scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
       particlesTween.progress(scrollPercentAcc);
+      particles.geometry.attributes.position.needsUpdate = true;
     }
 
     if (isRequestRender) {
@@ -317,6 +226,5 @@ const App = function () {
 
   init();
   window.addEventListener('resize', resize);
-  $btnChange.addEventListener('click', setParticlesAnimation);
 };
 window.addEventListener('load', App);
