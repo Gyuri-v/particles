@@ -9,6 +9,7 @@ const App = function () {
   let ww, wh;
   let renderer, scene, camera, light, controls, gui;
   let isRequestRender = false;
+  let isAnimation = false;
   // let currentShape = 'pumpkin';
 
   const pointArrays = { pumpkin: null, pumpkinOut: null, cat: null, bird: null };
@@ -16,7 +17,8 @@ const App = function () {
 
   let maxPointsNum = 0;
   let particleTween;
-  let particlePositions;
+  let particleOrgPositions;
+  let particleOutPositions;
 
   const $container = document.querySelector('.container');
   let $canvas;
@@ -51,6 +53,9 @@ const App = function () {
     // controls = new OrbitControls(camera, $canvas);
     // controls.addEventListener('change', renderRequest);
 
+    const axesHelper = new THREE.AxesHelper(3);
+    scene.add(axesHelper);
+
     // Gui
     gui = new dat.GUI();
 
@@ -64,7 +69,7 @@ const App = function () {
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        setInOutPoint();
+        // setInOutPoint();
         setParticle();
         setParticleAnimation();
 
@@ -94,6 +99,7 @@ const App = function () {
         }
       });
       pointArrays.pumpkin = getModelGeoPositionArray(model);
+      pointArrays.pumpkinOut = getModelGeoPositionArray(model, 5000, true);
     });
 
     gltfLoader.load('./resources/models/cat.glb', (gltf) => {
@@ -109,6 +115,7 @@ const App = function () {
         }
       });
       pointArrays.cat = getModelGeoPositionArray(model);
+      pointArrays.catOut = getModelGeoPositionArray(model, 5000, true);
     });
 
     gltfLoader.load('./resources/models/bird.glb', (gltf) => {
@@ -126,23 +133,23 @@ const App = function () {
         }
       });
       pointArrays.bird = getModelGeoPositionArray(model);
+      pointArrays.birdOut = getModelGeoPositionArray(model, 5000, true);
     });
   };
 
-  const setInOutPoint = function () {
-    for (const key in pointArrays) {
-      if (Object.hasOwnProperty.call(pointArrays, key)) {
-        const array = pointArrays[key];
+  // const setInOutPoint = function () {
+  //   for (const key in pointArrays) {
+  //     if (Object.hasOwnProperty.call(pointArrays, key)) {
+  //       const array = pointArrays[key];
 
-        pointArrays[key + 'Out'] = new Float32Array(array.length);
+  //       pointArrays[key + 'Out'] = new Float32Array(array.length);
 
-        for (let i = 0; i < array.length - 1; i++) {
-          pointArrays[key + 'Out'][i] = array[i] + Math.random() * 0.2;
-        }
-      }
-    }
-    console.log(pointArrays);
-  };
+  //       for (let i = 0; i < array.length - 1; i++) {
+  //         pointArrays[key + 'Out'][i] = array[i] + Math.random() * 0.2;
+  //       }
+  //     }
+  //   }
+  // };
 
   const setParticle = function () {
     const material = new THREE.PointsMaterial({ size: 1.5, constize: 1, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending });
@@ -151,7 +158,6 @@ const App = function () {
 
     const colorInside = new THREE.Color('#7d9be6');
     const colorOutside = new THREE.Color('#001d67');
-
     const positions = pointArrays.pumpkin.slice();
     const colors = new Float32Array(positions.length * 3);
     for (let i = 0; i < positions.length; i++) {
@@ -164,6 +170,7 @@ const App = function () {
       colors[i * 3 + 2] = mixedColor.b;
     }
 
+    // org
     geometryOrg.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometryOrg.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -171,6 +178,7 @@ const App = function () {
     particle.rotation.x = -Math.PI / 2;
     particle.position.y = 10;
 
+    // out
     geometryOut.setAttribute('position', new THREE.BufferAttribute(pointArrays.pumpkinOut, 3));
     geometryOut.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
@@ -180,14 +188,20 @@ const App = function () {
 
     scene.add(particle, particleOut);
     renderRequest();
+
+    isAnimation = true;
   };
 
   const setParticleAnimation = function () {
-    particlePositions = particle.geometry.attributes.position.array;
+    particleOrgPositions = particle.geometry.attributes.position.array;
+    particleOutPositions = particleOut.geometry.attributes.position.array;
+
     particleTween = gsap.timeline({ paused: true });
-    particleTween.to(particlePositions, { endArray: pointArrays.cat }, 'toCat');
+    particleTween.to(particleOrgPositions, { endArray: pointArrays.cat }, 'toCat');
+    particleTween.to(particleOutPositions, { endArray: pointArrays.catOut }, 'toCat');
     particleTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
-    particleTween.to(particlePositions, { endArray: pointArrays.bird }, 'toBird');
+    particleTween.to(particleOrgPositions, { endArray: pointArrays.bird }, 'toBird');
+    particleTween.to(particleOutPositions, { endArray: pointArrays.birdOut }, 'toBird');
     particleTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
 
     window.addEventListener('scroll', requestScroll);
@@ -209,9 +223,11 @@ const App = function () {
   };
 
   // Get -------------------
-  const getModelGeoPositionArray = function (model) {
+  const getModelGeoPositionArray = function (model, count, isScatter) {
     const tempPosition = new THREE.Vector3();
     const samplePoints = [];
+
+    let countNum = count ? count : 20000;
 
     let sampler;
     model.traverse((obj) => {
@@ -220,9 +236,17 @@ const App = function () {
       }
     });
 
-    for (let i = 0; i < 20000; i++) {
+    for (let i = 0; i < countNum; i++) {
       sampler.sample(tempPosition);
-      samplePoints.push(tempPosition.x, tempPosition.y, tempPosition.z);
+      if (isScatter) {
+        const posX = tempPosition.x > 0 ? tempPosition.x + Math.random() : tempPosition.x - Math.random();
+        const posY = tempPosition.y > 0 ? tempPosition.y + Math.random() : tempPosition.y - Math.random();
+        const posZ = tempPosition.z > 0 ? tempPosition.z + Math.random() : tempPosition.z - Math.random();
+
+        samplePoints.push(posX, posY, posZ);
+      } else {
+        samplePoints.push(tempPosition.x, tempPosition.y, tempPosition.z);
+      }
     }
 
     const pointArray = new Float32Array(samplePoints, 3);
@@ -236,20 +260,27 @@ const App = function () {
 
   let particleCount = 0;
   let posX, posY, posZ;
+  // 문제1 ) 반짝이가 점점 이동함
+  // 문제2 ) gsap 이동하는동안 ramdom으로 움지는것은 작동안해서 멈춰보임
+  // 문제3 ) 너무 빠르게 일정방향으로만 움직임
+
+  // -> 웨이브 동작 진행해보기
+  // -> 웨이브 치는 값 + gsap 이동하는 값을 설정할수있을까..
+
   const update = function () {
-    if (scrollPercent.toFixed(6) !== scrollPercentAcc.toFixed(6)) {
+    if (scrollPercent.toFixed(3) !== scrollPercentAcc.toFixed(3)) {
       scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
       particleTween.progress(scrollPercentAcc);
       particle.geometry.attributes.position.needsUpdate = true;
     }
 
-    if (pointArrays.pumpkinOut) {
+    if (isAnimation && pointArrays.pumpkinOut) {
       for (let i = 0; i < pointArrays.pumpkinOut.length / 3; i++) {
         const i3 = i * 3;
 
         posX = pointArrays.pumpkinOut[i3] - Math.sin(i + particleCount) * Math.random() * 0.05;
         posY = pointArrays.pumpkinOut[i3 + 1] - Math.cos(i + particleCount) * Math.random() * 0.05;
-        posZ = pointArrays.pumpkinOut[i3 + 2] - Math.cos(i + particleCount) * Math.random() * 0.05;
+        posZ = pointArrays.pumpkinOut[i3 + 2] - Math.sin(i + particleCount) * Math.random() * 0.05;
 
         pointArrays.pumpkinOut[i3] = posX;
         pointArrays.pumpkinOut[i3 + 1] = posY;
