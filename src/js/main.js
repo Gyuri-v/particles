@@ -11,12 +11,12 @@ const App = function () {
   let isRequestRender = false;
   // let currentShape = 'pumpkin';
 
-  const pointArrays = { pumkin: null, cat: null, bird: null };
-  let particles;
+  const pointArrays = { pumpkin: null, pumpkinOut: null, cat: null, bird: null };
+  let particle, particleIn, particleOut;
 
   let maxPointsNum = 0;
-  let particlesTween;
-  let particlesPositions;
+  let particleTween;
+  let particlePositions;
 
   const $container = document.querySelector('.container');
   let $canvas;
@@ -64,8 +64,9 @@ const App = function () {
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        setParticles();
-        setParticlesAnimation();
+        setInOutPoint();
+        setParticle();
+        setParticleAnimation();
 
         requestScroll();
       }
@@ -87,11 +88,12 @@ const App = function () {
         if (child instanceof THREE.Mesh) {
           mesh = child;
           geometry = child.geometry;
+
+          geometry.rotateX(THREE.MathUtils.degToRad(10));
+          geometry.translate(0, 0, -20);
         }
       });
-      geometry.rotateX(THREE.MathUtils.degToRad(10));
-      geometry.translate(0, 0, -20);
-      pointArrays.pumkin = getModelGeoPositionArray(model);
+      pointArrays.pumpkin = getModelGeoPositionArray(model);
     });
 
     gltfLoader.load('./resources/models/cat.glb', (gltf) => {
@@ -101,11 +103,11 @@ const App = function () {
         if (child instanceof THREE.Mesh) {
           mesh = child;
           geometry = child.geometry;
+
+          geometry.rotateX(THREE.MathUtils.degToRad(90));
+          geometry.rotateZ(THREE.MathUtils.degToRad(-60));
         }
       });
-      geometry.rotateX(THREE.MathUtils.degToRad(90));
-      geometry.rotateZ(THREE.MathUtils.degToRad(-60));
-
       pointArrays.cat = getModelGeoPositionArray(model);
     });
 
@@ -127,14 +129,30 @@ const App = function () {
     });
   };
 
-  const setParticles = function () {
-    const material = new THREE.PointsMaterial({ size: 1.5, constize: 1, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending });
-    const geometry = new THREE.BufferGeometry();
+  const setInOutPoint = function () {
+    for (const key in pointArrays) {
+      if (Object.hasOwnProperty.call(pointArrays, key)) {
+        const array = pointArrays[key];
 
-    const colorInside = new THREE.Color('#fff');
+        pointArrays[key + 'Out'] = new Float32Array(array.length);
+
+        for (let i = 0; i < array.length - 1; i++) {
+          pointArrays[key + 'Out'][i] = array[i] + Math.random() * 0.2;
+        }
+      }
+    }
+    console.log(pointArrays);
+  };
+
+  const setParticle = function () {
+    const material = new THREE.PointsMaterial({ size: 1.5, constize: 1, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending });
+    const geometryOrg = new THREE.BufferGeometry();
+    const geometryOut = new THREE.BufferGeometry();
+
+    const colorInside = new THREE.Color('#7d9be6');
     const colorOutside = new THREE.Color('#001d67');
 
-    const positions = pointArrays.pumkin.slice();
+    const positions = pointArrays.pumpkin.slice();
     const colors = new Float32Array(positions.length * 3);
     for (let i = 0; i < positions.length; i++) {
       const radius = Math.random() * 5;
@@ -146,25 +164,31 @@ const App = function () {
       colors[i * 3 + 2] = mixedColor.b;
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometryOrg.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometryOrg.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    particles = new THREE.Points(geometry, material);
-    particles.rotation.x = -Math.PI / 2;
-    particles.position.y = 10;
+    particle = new THREE.Points(geometryOrg, material);
+    particle.rotation.x = -Math.PI / 2;
+    particle.position.y = 10;
 
-    scene.add(particles);
+    geometryOut.setAttribute('position', new THREE.BufferAttribute(pointArrays.pumpkinOut, 3));
+    geometryOut.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
+    particleOut = new THREE.Points(geometryOut, material);
+    particleOut.rotation.x = -Math.PI / 2;
+    particleOut.position.y = 10;
+
+    scene.add(particle, particleOut);
     renderRequest();
   };
 
-  const setParticlesAnimation = function () {
-    particlesPositions = particles.geometry.attributes.position.array;
-    particlesTween = gsap.timeline({ paused: true });
-    particlesTween.to(particlesPositions, { endArray: pointArrays.cat }, 'toCat');
-    particlesTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
-    particlesTween.to(particlesPositions, { endArray: pointArrays.bird }, 'toBird');
-    particlesTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
+  const setParticleAnimation = function () {
+    particlePositions = particle.geometry.attributes.position.array;
+    particleTween = gsap.timeline({ paused: true });
+    particleTween.to(particlePositions, { endArray: pointArrays.cat }, 'toCat');
+    particleTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
+    particleTween.to(particlePositions, { endArray: pointArrays.bird }, 'toBird');
+    particleTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
 
     window.addEventListener('scroll', requestScroll);
   };
@@ -187,7 +211,7 @@ const App = function () {
   // Get -------------------
   const getModelGeoPositionArray = function (model) {
     const tempPosition = new THREE.Vector3();
-    const points = [];
+    const samplePoints = [];
 
     let sampler;
     model.traverse((obj) => {
@@ -198,10 +222,10 @@ const App = function () {
 
     for (let i = 0; i < 20000; i++) {
       sampler.sample(tempPosition);
-      points.push(tempPosition.x, tempPosition.y, tempPosition.z);
+      samplePoints.push(tempPosition.x, tempPosition.y, tempPosition.z);
     }
 
-    const pointArray = new Float32Array(points, 3);
+    const pointArray = new Float32Array(samplePoints, 3);
     return pointArray;
   };
 
@@ -210,12 +234,35 @@ const App = function () {
     isRequestRender = true;
   };
 
-  const render = function () {
+  let particleCount = 0;
+  let posX, posY, posZ;
+  const update = function () {
     if (scrollPercent.toFixed(6) !== scrollPercentAcc.toFixed(6)) {
       scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
-      particlesTween.progress(scrollPercentAcc);
-      particles.geometry.attributes.position.needsUpdate = true;
+      particleTween.progress(scrollPercentAcc);
+      particle.geometry.attributes.position.needsUpdate = true;
     }
+
+    if (pointArrays.pumpkinOut) {
+      for (let i = 0; i < pointArrays.pumpkinOut.length / 3; i++) {
+        const i3 = i * 3;
+
+        posX = pointArrays.pumpkinOut[i3] - Math.sin(i + particleCount) * Math.random() * 0.05;
+        posY = pointArrays.pumpkinOut[i3 + 1] - Math.cos(i + particleCount) * Math.random() * 0.05;
+        posZ = pointArrays.pumpkinOut[i3 + 2] - Math.cos(i + particleCount) * Math.random() * 0.05;
+
+        pointArrays.pumpkinOut[i3] = posX;
+        pointArrays.pumpkinOut[i3 + 1] = posY;
+        pointArrays.pumpkinOut[i3 + 2] = posZ;
+
+        particleOut.geometry.attributes.position.needsUpdate = true;
+      }
+      particleCount += 0.1;
+    }
+  };
+
+  const render = function () {
+    update();
 
     if (isRequestRender) {
       renderer.setSize(ww, wh);
