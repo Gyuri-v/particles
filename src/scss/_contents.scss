@@ -11,3 +11,17 @@
   font-weight: 500;
   color: #000;
 }
+
+.container {
+  section {
+    height: 200vh;
+  }
+
+  canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+  }
+}
