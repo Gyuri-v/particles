@@ -8,19 +8,16 @@ import dat from 'dat.gui';
 import vertexShader from '../shader/vertex.glsl';
 import fragmentShader from '../shader/fragment.glsl';
 
-const DEBUG = location.search.indexOf('debug') > -1;
-
 const App = function () {
   let ww, wh;
-  let renderer, scene, camera, light, controls, gui, clock;
+  let renderer, scene, camera, light, controls, gui;
   let isRequestRender = false;
   let isAnimation = false;
 
-  let geometry, material, particle;
   const pointArrays = { pumpkin: null, cat: null, bird: null };
   const parameters = {
-    count: 40000,
-    size: 0.5,
+    count: 20000,
+    size: 0.005,
     radius: 5,
     branches: 3,
     spin: 1,
@@ -29,6 +26,12 @@ const App = function () {
     insideColor: '#ff6030',
     outsideColor: '#1b3984',
   };
+  let particle, particleOut;
+
+  let maxPointsNum = 0;
+  let particleTween;
+  let particleOrgPositions;
+  let particleOutPositions;
 
   const $container = document.querySelector('.container');
   let $canvas;
@@ -51,7 +54,7 @@ const App = function () {
 
     // Camera
     camera = new THREE.PerspectiveCamera(70, ww / wh, 0.1, 1000);
-    camera.position.set(0, 0, 30);
+    camera.position.set(0, 30, 30);
     // camera.lookAt(0, 0, 0);
     scene.add(camera);
 
@@ -60,19 +63,14 @@ const App = function () {
     scene.add(light);
 
     // Controls
-    if (DEBUG) {
-      controls = new OrbitControls(camera, $canvas);
-      controls.addEventListener('change', renderRequest);
-    }
+    controls = new OrbitControls(camera, $canvas);
+    controls.addEventListener('change', renderRequest);
 
     const axesHelper = new THREE.AxesHelper(3);
     scene.add(axesHelper);
 
     // Gui
     gui = new dat.GUI();
-
-    // Clock
-    clock = new THREE.Clock();
 
     // Setting
     setModels();
@@ -101,55 +99,69 @@ const App = function () {
   const setModels = function () {
     const gltfLoader = new GLTFLoader();
 
-    gltfLoader.load('./resources/models/pumpkin3.glb', (gltf) => {
+    gltfLoader.load('./resources/models/pumpkin2.glb', (gltf) => {
       const model = gltf.scene.children[0];
-      pointArrays.pumpkin = getModelGeoPositionArray(model);
-    });
-
-    gltfLoader.load('./resources/models/cat2.glb', (gltf) => {
-      const model = gltf.scene.children[0];
-      let meshGeometery, mesh;
+      let geometry, mesh;
       model.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           mesh = child;
-          meshGeometery = child.geometry;
-          meshGeometery.translate(-7, 0, 0);
+          geometry = child.geometry;
+
+          geometry.rotateX(THREE.MathUtils.degToRad(10));
+          geometry.translate(0, 0, -20);
+        }
+      });
+      pointArrays.pumpkin = getModelGeoPositionArray(model);
+      // pointArrays.pumpkinOut = getModelGeoPositionArray(model, 5000, true);
+    });
+
+    gltfLoader.load('./resources/models/cat.glb', (gltf) => {
+      const model = gltf.scene.children[0];
+      let geometry, mesh;
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          mesh = child;
+          geometry = child.geometry;
+
+          geometry.rotateX(THREE.MathUtils.degToRad(90));
+          geometry.rotateZ(THREE.MathUtils.degToRad(-60));
         }
       });
       pointArrays.cat = getModelGeoPositionArray(model);
+      // pointArrays.catOut = getModelGeoPositionArray(model, 5000, true);
     });
 
     gltfLoader.load('./resources/models/bird.glb', (gltf) => {
       const model = gltf.scene.children[0];
-      let meshGeometery, mesh;
+      let geometry, mesh;
       model.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           mesh = child;
-          meshGeometery = child.geometry;
+          geometry = child.geometry;
 
-          // meshGeometery.scale(4, 4, 4);
-          // meshGeometery.rotateX(THREE.MathUtils.degToRad(90));
-          // meshGeometery.rotateZ(THREE.MathUtils.degToRad(115));
-          // meshGeometery.translate(-5, 0, 0);
+          geometry.scale(4, 4, 4);
+          geometry.rotateX(THREE.MathUtils.degToRad(90));
+          geometry.rotateZ(THREE.MathUtils.degToRad(115));
+          geometry.translate(-5, 0, 0);
         }
       });
       pointArrays.bird = getModelGeoPositionArray(model);
+      // pointArrays.birdOut = getModelGeoPositionArray(model, 5000, true);
     });
   };
 
   const setParticle = function () {
     // -- Geometry
-    geometry = new THREE.BufferGeometry();
+    const geometryOrg = new THREE.BufferGeometry();
+    // const geometryOut = new THREE.BufferGeometry();
 
     const positions = pointArrays.pumpkin.slice();
-    const positionCat = pointArrays.cat.slice();
-    const positionBird = pointArrays.bird.slice();
     const randomness = new Float32Array(parameters.count * 3);
     const scales = new Float32Array(parameters.count * 1);
     const colors = new Float32Array(parameters.count * 3);
 
-    const colorInside = new THREE.Color(parameters.insideColor);
-    const colorOutside = new THREE.Color(parameters.outsideColor);
+    const colorInside = new THREE.Color('#7d9be6');
+    const colorOutside = new THREE.Color('#001d67');
 
     for (let i = 0; i < parameters.count; i++) {
       const i3 = i * 3;
@@ -173,24 +185,20 @@ const App = function () {
       colors[i * 3 + 1] = mixedColor.g;
       colors[i * 3 + 2] = mixedColor.b;
 
-      // Scale
+      // Size
       scales[i] = Math.random();
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
-    geometry.setAttribute('aRandomness', new THREE.BufferAttribute(randomness, 3));
-    geometry.setAttribute('aPositionCat', new THREE.BufferAttribute(positionCat, 3));
-    geometry.setAttribute('aPositionBird', new THREE.BufferAttribute(positionBird, 3));
+    geometryOrg.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometryOrg.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
+    geometryOrg.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     // -- Material
-    material = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
       uniforms: {
-        uSize: { value: 50.0 },
-        uScroll: { value: 0 },
+        uSize: { value: 0.1 },
       },
       depthWrite: false,
       vertexColors: true,
@@ -198,22 +206,35 @@ const App = function () {
     });
 
     // -- Points
-    particle = new THREE.Points(geometry, material);
-    scene.add(particle);
+    particle = new THREE.Points(geometryOrg, material);
+    particle.rotation.x = -Math.PI / 2;
+    particle.position.y = 10;
+
+    // out
+    // geometryOut.setAttribute('position', new THREE.BufferAttribute(pointArrays.pumpkinOut, 3));
+    // geometryOut.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // particleOut = new THREE.Points(geometryOut, material);
+    // particleOut.rotation.x = -Math.PI / 2;
+    // particleOut.position.y = 10;
+
+    scene.add(particle); // particleOut
     renderRequest();
 
     isAnimation = true;
   };
 
-  let particleTween;
   const setParticleAnimation = function () {
-    const particleOrgPositions = particle.geometry.attributes.position.array;
+    particleOrgPositions = particle.geometry.attributes.position.array;
+    // particleOutPositions = particleOut.geometry.attributes.position.array;
 
-    // particleTween = gsap.timeline({ paused: true });
-    // particleTween.to(particleOrgPositions, { endArray: pointArrays.cat }, 'toCat');
-    // particleTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
-    // particleTween.to(particleOrgPositions, { endArray: pointArrays.bird }, 'toBird');
-    // particleTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
+    particleTween = gsap.timeline({ paused: true });
+    particleTween.to(particleOrgPositions, { endArray: pointArrays.cat }, 'toCat');
+    // particleTween.to(particleOutPositions, { endArray: pointArrays.catOut }, 'toCat');
+    particleTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
+    particleTween.to(particleOrgPositions, { endArray: pointArrays.bird }, 'toBird');
+    // particleTween.to(particleOutPositions, { endArray: pointArrays.birdOut }, 'toBird');
+    particleTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
 
     window.addEventListener('scroll', requestScroll);
   };
@@ -224,15 +245,13 @@ const App = function () {
   };
 
   let scrollPercent = 0;
+  let scrollPercentAcc = 0;
   const scroll = function () {
     const scrollTop = window.scrollY;
     const moveArea = $container.offsetHeight - wh;
     const percent = scrollTop / moveArea;
 
     scrollPercent = percent;
-
-    // particleTween.progress(percent);
-    material.uniforms.uScroll.value = percent.toFixed(1) * 1;
   };
 
   // Get -------------------
@@ -271,13 +290,49 @@ const App = function () {
     isRequestRender = true;
   };
 
+  let particleCount = 0;
+  let posX, posY, posZ;
+  // 문제1 ) 반짝이가 점점 이동함
+  // 문제2 ) gsap 이동하는동안 ramdom으로 움지는것은 작동안해서 멈춰보임
+  // 문제3 ) 너무 빠르게 일정방향으로만 움직임
+
+  // -> 웨이브 동작 진행해보기
+  // -> 웨이브 치는 값 + gsap 이동하는 값을 설정할수있을까..
+  // -> delta 값등을 줘서 일정 시간으로 움직이게 해야함 && 속도 조절이 가능해야함
+  // -> 불이랑 폭죽 나오는것도 해보기..
+
+  const update = function () {
+    if (scrollPercent.toFixed(3) !== scrollPercentAcc.toFixed(3)) {
+      scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
+      particleTween.progress(scrollPercentAcc);
+      particle.geometry.attributes.position.needsUpdate = true;
+    }
+
+    if (isAnimation && pointArrays.pumpkinOut) {
+      for (let i = 0; i < pointArrays.pumpkinOut.length / 3; i++) {
+        const i3 = i * 3;
+
+        posX = pointArrays.pumpkinOut[i3] - Math.sin(i + particleCount) * Math.random() * 0.05;
+        posY = pointArrays.pumpkinOut[i3 + 1] - Math.cos(i + particleCount) * Math.random() * 0.05;
+        posZ = pointArrays.pumpkinOut[i3 + 2] - Math.sin(i + particleCount) * Math.random() * 0.05;
+
+        pointArrays.pumpkinOut[i3] = posX;
+        pointArrays.pumpkinOut[i3 + 1] = posY;
+        pointArrays.pumpkinOut[i3 + 2] = posZ;
+
+        particleOut.geometry.attributes.position.needsUpdate = true;
+      }
+      particleCount += 0.1;
+    }
+  };
+
   const render = function () {
     // update();
 
-    // if (isRequestRender) {
-    renderer.setSize(ww, wh);
-    renderer.render(scene, camera);
-    // }
+    if (isRequestRender) {
+      renderer.setSize(ww, wh);
+      renderer.render(scene, camera);
+    }
     window.requestAnimationFrame(render);
   };
 
