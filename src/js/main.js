@@ -12,25 +12,29 @@ const DEBUG = location.search.indexOf('debug') > -1;
 
 const App = function () {
   let ww, wh;
-  let renderer, scene, camera, light, controls, gui, clock;
+  let renderer, scene, camera, light, controls, gui, clock, raycaster;
   let isRequestRender = false;
-  let isAnimation = false;
-
-  let particleTween;
 
   let scrollPercent = 0;
   let scrollPercentAcc = 0;
+  let scrollPercentAni = 0;
 
   let geometry, material, particle;
-  const pointArrays = { pumpkin: null, cat: null, bird: null };
+
+  const mouse = new THREE.Vector2();
   const current = { model: '' };
+  const pointArrays = {
+    pumpkin: null,
+    cat: null,
+    bird: null,
+  };
   const parameters = {
     count: 40000,
     size: 0.5,
     radius: 5,
     branches: 3,
     spin: 1,
-    randomness: 0.2,
+    randomness: 0.5,
     randomnessPower: 3,
     insideColor: '#ff6030',
     outsideColor: '#1b3984',
@@ -58,7 +62,6 @@ const App = function () {
     // Camera
     camera = new THREE.PerspectiveCamera(70, ww / wh, 0.1, 1000);
     camera.position.set(0, 0, 30);
-    // camera.lookAt(0, 0, 0);
     scene.add(camera);
 
     // Light
@@ -71,14 +74,15 @@ const App = function () {
       controls.addEventListener('change', renderRequest);
     }
 
-    const axesHelper = new THREE.AxesHelper(3);
-    scene.add(axesHelper);
-
     // Gui
     gui = new dat.GUI();
 
     // Clock
     clock = new THREE.Clock();
+
+    // Raycaster
+    raycaster = new THREE.Raycaster();
+    // raycaster.params.Points.threshold = 1; // 포인트 찍히도록 하는거
 
     // Setting
     setModels();
@@ -91,7 +95,7 @@ const App = function () {
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
         setParticle();
-        setParticleAnimation();
+        setEvents();
 
         requestScroll();
       }
@@ -123,12 +127,11 @@ const App = function () {
   };
 
   const setParticle = function () {
-    // -- Geometry
+    // - Geometry
     geometry = new THREE.BufferGeometry();
 
     const positions = pointArrays.pumpkin.slice();
     const positionCat = pointArrays.cat.slice();
-    const positionBird = pointArrays.bird.slice();
     const randomness = new Float32Array(parameters.count * 3);
     const scales = new Float32Array(parameters.count * 1);
     const colors = new Float32Array(parameters.count * 3);
@@ -168,9 +171,7 @@ const App = function () {
     geometry.setAttribute('aRandomness', new THREE.BufferAttribute(randomness, 3));
     geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(positionCat, 3));
 
-    current.model = 'pumkin';
-
-    // -- Material
+    // - Material
     material = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
@@ -183,24 +184,35 @@ const App = function () {
       blending: THREE.AdditiveBlending,
     });
 
-    // -- Points
+    // - Points
+    current.model = 'pumkin';
     particle = new THREE.Points(geometry, material);
     scene.add(particle);
     renderRequest();
-
-    isAnimation = true;
   };
 
-  const setParticleAnimation = function () {
-    // const particleOrgPositions = particle.geometry.attributes.position.array;
-
-    // particleTween = gsap.timeline({ paused: true });
-    // particleTween.to(particleOrgPositions, { endArray: pointArrays.cat }, 'toCat');
-    // particleTween.to(camera.position, { x: -10, y: 30, z: 35 }, 'toCat');
-    // particleTween.to(particleOrgPositions, { endArray: pointArrays.bird }, 'toBird');
-    // particleTween.to(camera.position, { x: 0, y: 20, z: 20 }, 'toBird');
-
+  const setEvents = function () {
     window.addEventListener('scroll', requestScroll);
+    console.log(scene.children, particle);
+
+    $canvas.addEventListener('mousemove', function (e) {
+      mouse.x = (e.clientX / $canvas.clientWidth) * 2 - 1;
+      mouse.y = -((e.clientY / $canvas.clientHeight) * 2 - 1);
+
+      checkIntersects();
+      material.uniforms.mousePos = mouse;
+    });
+  };
+
+  // Raycaster ----------------
+  const checkIntersects = function () {
+    raycaster.setFromCamera(mouse, camera);
+
+    const intersects = raycaster.intersectObjects(scene.children, false);
+
+    if (intersects[0]) {
+      console.log(intersects[0].point);
+    }
   };
 
   // Scroll -------------------
@@ -247,7 +259,6 @@ const App = function () {
   };
 
   // Render -------------------
-  let scrollPercentAni;
   const update = function () {
     if (scrollPercent.toFixed(3) !== scrollPercentAcc.toFixed(3)) {
       scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
@@ -293,3 +304,10 @@ const App = function () {
   window.addEventListener('resize', resize);
 };
 window.addEventListener('load', App);
+
+const getPoint = function (e) {
+  if (e.touches) {
+    e = e.touches[0] || e.changedTouches[0];
+  }
+  return [e.pageX || e.clientX, e.pageY || e.clientY];
+};

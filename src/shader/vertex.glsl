@@ -1,5 +1,6 @@
 uniform float uSize;
 uniform float uScroll;
+uniform float uMousePos;
 
 attribute float aScale;
 attribute vec3 aRandomness;
@@ -8,6 +9,7 @@ attribute vec3 aPositionTarget;
 varying vec3 vColor;
 
 void main() {
+
   // position
   vec4 modelPosition = modelMatrix * vec4(position, 1.0);
 
