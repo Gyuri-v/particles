@@ -16,8 +16,14 @@ const App = function () {
   let isRequestRender = false;
   let isAnimation = false;
 
+  let particleTween;
+
+  let scrollPercent = 0;
+  let scrollPercentAcc = 0;
+
   let geometry, material, particle;
   const pointArrays = { pumpkin: null, cat: null, bird: null };
+  const current = { model: '' };
   const parameters = {
     count: 40000,
     size: 0.5,
@@ -84,7 +90,6 @@ const App = function () {
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        // setInOutPoint();
         setParticle();
         setParticleAnimation();
 
@@ -108,31 +113,11 @@ const App = function () {
 
     gltfLoader.load('./resources/models/cat2.glb', (gltf) => {
       const model = gltf.scene.children[0];
-      let meshGeometery, mesh;
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          mesh = child;
-          meshGeometery = child.geometry;
-          meshGeometery.translate(-7, 0, 0);
-        }
-      });
       pointArrays.cat = getModelGeoPositionArray(model);
     });
 
     gltfLoader.load('./resources/models/bird.glb', (gltf) => {
       const model = gltf.scene.children[0];
-      let meshGeometery, mesh;
-      model.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          mesh = child;
-          meshGeometery = child.geometry;
-
-          // meshGeometery.scale(4, 4, 4);
-          // meshGeometery.rotateX(THREE.MathUtils.degToRad(90));
-          // meshGeometery.rotateZ(THREE.MathUtils.degToRad(115));
-          // meshGeometery.translate(-5, 0, 0);
-        }
-      });
       pointArrays.bird = getModelGeoPositionArray(model);
     });
   };
@@ -181,15 +166,16 @@ const App = function () {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
     geometry.setAttribute('aRandomness', new THREE.BufferAttribute(randomness, 3));
-    geometry.setAttribute('aPositionCat', new THREE.BufferAttribute(positionCat, 3));
-    geometry.setAttribute('aPositionBird', new THREE.BufferAttribute(positionBird, 3));
+    geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(positionCat, 3));
+
+    current.model = 'pumkin';
 
     // -- Material
     material = new THREE.ShaderMaterial({
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
       uniforms: {
-        uSize: { value: 50.0 },
+        uSize: { value: 50.0 * renderer.getPixelRatio() },
         uScroll: { value: 0 },
       },
       depthWrite: false,
@@ -205,9 +191,8 @@ const App = function () {
     isAnimation = true;
   };
 
-  let particleTween;
   const setParticleAnimation = function () {
-    const particleOrgPositions = particle.geometry.attributes.position.array;
+    // const particleOrgPositions = particle.geometry.attributes.position.array;
 
     // particleTween = gsap.timeline({ paused: true });
     // particleTween.to(particleOrgPositions, { endArray: pointArrays.cat }, 'toCat');
@@ -222,17 +207,12 @@ const App = function () {
   const requestScroll = function () {
     requestAnimationFrame(scroll);
   };
-
-  let scrollPercent = 0;
   const scroll = function () {
     const scrollTop = window.scrollY;
     const moveArea = $container.offsetHeight - wh;
     const percent = scrollTop / moveArea;
 
     scrollPercent = percent;
-
-    // particleTween.progress(percent);
-    material.uniforms.uScroll.value = percent.toFixed(1) * 1;
   };
 
   // Get -------------------
@@ -267,17 +247,45 @@ const App = function () {
   };
 
   // Render -------------------
+  let scrollPercentAni;
+  const update = function () {
+    if (scrollPercent.toFixed(3) !== scrollPercentAcc.toFixed(3)) {
+      scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
+
+      if (scrollPercentAcc < 0.5) {
+        scrollPercentAni = scrollPercentAcc * 2;
+
+        if (current.model !== 'pumkin') {
+          current.model = 'pumkin';
+
+          geometry.setAttribute('position', new THREE.BufferAttribute(pointArrays.pumpkin, 3));
+          geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(pointArrays.cat, 3));
+        }
+      } else {
+        scrollPercentAni = scrollPercentAcc * 2 - 1;
+
+        if (current.model !== 'cat') {
+          current.model = 'cat';
+
+          geometry.setAttribute('position', new THREE.BufferAttribute(pointArrays.cat, 3));
+          geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(pointArrays.bird, 3));
+        }
+      }
+      material.uniforms.uScroll.value = scrollPercentAni * 1;
+    }
+  };
+
   const renderRequest = function () {
     isRequestRender = true;
   };
 
   const render = function () {
-    // update();
+    update();
 
-    // if (isRequestRender) {
-    renderer.setSize(ww, wh);
-    renderer.render(scene, camera);
-    // }
+    if (isRequestRender) {
+      renderer.setSize(ww, wh);
+      renderer.render(scene, camera);
+    }
     window.requestAnimationFrame(render);
   };
 

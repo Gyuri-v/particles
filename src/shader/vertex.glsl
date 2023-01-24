@@ -3,7 +3,7 @@ uniform float uScroll;
 
 attribute float aScale;
 attribute vec3 aRandomness;
-attribute vec3 aPositionCat;
+attribute vec3 aPositionTarget;
 
 varying vec3 vColor;
 
@@ -11,11 +11,11 @@ void main() {
   // position
   vec4 modelPosition = modelMatrix * vec4(position, 1.0);
 
-  // Randomness
-  // modelPosition.xyz += aRandomness;
-
   // Animation
-  modelPosition.xyz = modelPosition.xyz * (1.0 - uScroll) - aPositionCat.xyz * uScroll;
+  modelPosition.xyz = modelPosition.xyz * (1.0 - uScroll) + aPositionTarget.xyz * uScroll;
+
+  // Randomness
+  modelPosition.xyz += aRandomness;
 
   // 적용
   vec4 viewPosition = viewMatrix * modelPosition;
