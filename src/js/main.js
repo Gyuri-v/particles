@@ -21,7 +21,8 @@ const App = function () {
 
   let geometry, material, particle;
 
-  const mouse = new THREE.Vector2();
+  const meshes = [];
+  const mouse = new THREE.Vector3();
   const current = { model: '' };
   const pointArrays = {
     pumpkin: null,
@@ -29,7 +30,7 @@ const App = function () {
     bird: null,
   };
   const parameters = {
-    count: 40000,
+    count: 50000,
     size: 0.5,
     radius: 5,
     branches: 3,
@@ -111,18 +112,30 @@ const App = function () {
     const gltfLoader = new GLTFLoader();
 
     gltfLoader.load('./resources/models/pumpkin3.glb', (gltf) => {
-      const model = gltf.scene.children[0];
+      // const model = gltf.scene.children[0];
+      let model;
+      gltf.scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          model = child;
+        }
+      });
       pointArrays.pumpkin = getModelGeoPositionArray(model);
+      // scene.add(model);
+      meshes.push(model);
     });
 
     gltfLoader.load('./resources/models/cat2.glb', (gltf) => {
       const model = gltf.scene.children[0];
       pointArrays.cat = getModelGeoPositionArray(model);
+      // scene.add(model);
+      // meshes.push(model);
     });
 
     gltfLoader.load('./resources/models/bird.glb', (gltf) => {
       const model = gltf.scene.children[0];
       pointArrays.bird = getModelGeoPositionArray(model);
+      // scene.add(model);
+      // meshes.push(model);
     });
   };
 
@@ -178,6 +191,7 @@ const App = function () {
       uniforms: {
         uSize: { value: 50.0 * renderer.getPixelRatio() },
         uScroll: { value: 0 },
+        uMouse: { value: new THREE.Vector3() },
       },
       depthWrite: false,
       vertexColors: true,
@@ -191,16 +205,25 @@ const App = function () {
     renderRequest();
   };
 
+  let ball, mesh;
   const setEvents = function () {
     window.addEventListener('scroll', requestScroll);
-    console.log(scene.children, particle);
+
+    mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(30, 30, 30, 30), new THREE.MeshBasicMaterial({ color: 'blue', wireframe: true }));
+    // scene.add(mesh);
+
+    // ball = new THREE.Mesh(new THREE.SphereBufferGeometry(1, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }));
+    // scene.add(ball);
+
+    // console.log(meshes);
 
     $canvas.addEventListener('mousemove', function (e) {
       mouse.x = (e.clientX / $canvas.clientWidth) * 2 - 1;
       mouse.y = -((e.clientY / $canvas.clientHeight) * 2 - 1);
 
+      // material.uniforms.uMouse.value = mouse;
+
       checkIntersects();
-      material.uniforms.mousePos = mouse;
     });
   };
 
@@ -208,10 +231,11 @@ const App = function () {
   const checkIntersects = function () {
     raycaster.setFromCamera(mouse, camera);
 
-    const intersects = raycaster.intersectObjects(scene.children, false);
+    const intersects = raycaster.intersectObjects(meshes);
 
     if (intersects[0]) {
-      console.log(intersects[0].point);
+      // ball.position.copy(intersects[0].point);
+      material.uniforms.uMouse.value = intersects[0].point;
     }
   };
 
@@ -261,7 +285,7 @@ const App = function () {
   // Render -------------------
   const update = function () {
     if (scrollPercent.toFixed(3) !== scrollPercentAcc.toFixed(3)) {
-      scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.05;
+      scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.1;
 
       if (scrollPercentAcc < 0.5) {
         scrollPercentAni = scrollPercentAcc * 2;

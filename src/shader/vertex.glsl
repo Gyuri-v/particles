@@ -1,6 +1,6 @@
 uniform float uSize;
 uniform float uScroll;
-uniform float uMousePos;
+uniform vec3 uMouse;
 
 attribute float aScale;
 attribute vec3 aRandomness;
@@ -18,6 +18,23 @@ void main() {
 
   // Randomness
   modelPosition.xyz += aRandomness;
+
+  // Mouse move
+  // float distanceToMouse = pow(1.0 - clamp( length(uMouse.xyz - modelPosition.xyz) - 3.0, 0.0, 1.0 ), 2.0);
+  // vec3 dir = modelPosition.xyz - uMouse.xyz;
+  // // modelPosition.xy += distanceToMouse;
+  // modelPosition.xyz = mix(modelPosition.xyz, uMouse.xyz + normalize(dir) * 1.0, distanceToMouse);
+
+  // 새로운 방법
+  vec3 seg = modelPosition.xyz - uMouse.xyz;
+  vec3 dir = normalize(seg);
+  float dist = length(seg);
+  if ( dist < 5.0 ) {
+    float force = clamp(1.0 / (dist * dist), -0.0, 0.5);
+    modelPosition.xyz += dir * force;
+    // vNormal = force / 0.5;
+  }
+  
 
   // 적용
   vec4 viewPosition = viewMatrix * modelPosition;
