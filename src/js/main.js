@@ -111,7 +111,7 @@ const App = function () {
   const setModels = function () {
     const gltfLoader = new GLTFLoader();
 
-    gltfLoader.load('./resources/models/pumpkin3.glb', (gltf) => {
+    gltfLoader.load('./resources/models/pumpkin.glb', (gltf) => {
       // const model = gltf.scene.children[0];
       let model;
       gltf.scene.traverse((child) => {
@@ -124,7 +124,7 @@ const App = function () {
       meshes.push(model);
     });
 
-    gltfLoader.load('./resources/models/cat2.glb', (gltf) => {
+    gltfLoader.load('./resources/models/cat.glb', (gltf) => {
       const model = gltf.scene.children[0];
       pointArrays.cat = getModelGeoPositionArray(model);
       // scene.add(model);
@@ -231,9 +231,10 @@ const App = function () {
   const checkIntersects = function () {
     raycaster.setFromCamera(mouse, camera);
 
-    const intersects = raycaster.intersectObjects(meshes);
+    const intersects = raycaster.intersectObjects([particle]);
 
     if (intersects[0]) {
+      console.log(intersects[0].point);
       // ball.position.copy(intersects[0].point);
       material.uniforms.uMouse.value = intersects[0].point;
     }
