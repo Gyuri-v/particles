@@ -104,6 +104,10 @@ const App = function () {
         name: 'bird',
         setting: (geometry) => {},
       },
+      {
+        name: 'horse',
+        setting: (geometry) => {},
+      },
     ];
     numModels = models.length;
     numLoadedModels = 0;
@@ -114,6 +118,7 @@ const App = function () {
 
     models.forEach((info, index) => {
       dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
+        console.log(geometry);
         info.setting && info.setting(geometry);
 
         info.positionsArray = geometry.getAttribute('position').array;
@@ -210,13 +215,14 @@ const App = function () {
 
     const sizes = new Float32Array(textureSize * textureSize);
     sizes.forEach((v, i) => {
-      sizes[i] = Math.random();
+      sizes[i] = Math.random() * 0.5;
     });
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
     const mesh = new THREE.Points(geometry, pointMaterial);
     particleInnerGroup.add(mesh);
 
+    gsap.ticker.add(animate);
     scene.add(particleGroup);
   };
 
@@ -229,8 +235,8 @@ const App = function () {
     timeline = gsap.timeline({ paused: true, repeat: -1, yoyo: true, onUpdate: onTimelineUpdate });
     timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 1, ease: 'cubic.inOut' });
     timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2, ease: 'cubic.inOut' }, '<');
-    // timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 2, ease: 'cubic.inOut' });
-    // timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 2, ease: 'cubic.inOut' }, '<');
+    timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 2, ease: 'cubic.inOut' });
+    timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 2, ease: 'cubic.inOut' }, '<');
   };
 
   const onTimelineUpdate = function () {
@@ -252,6 +258,17 @@ const App = function () {
     const moveArea = $container.offsetHeight - wh;
     const percent = scrollTop / moveArea;
     timeline && timeline.progress(percent);
+  };
+
+  // Animation -------------------
+  let renderedCount = 0;
+  const animate = function (time, deltaTime, frame) {
+    if (6000 > renderedCount) {
+      pointMaterial.uniforms.u_time.value += deltaTime * 0.05;
+      particleInnerGroup.rotation.y += deltaTime * 0.0001;
+      render();
+      renderedCount++;
+    }
   };
 
   // Render -------------------
