@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import gsap from 'gsap';
 import dat from 'dat.gui';
 
-import vertexShader from '../shader/vertex.glsl';
-import fragmentShader from '../shader/fragment.glsl';
+import vertexShader from '../shader/clonepsy/vertex.glsl';
+import fragmentShader from '../shader/clonepsy/fragment.glsl';
 import { Timeline } from 'gsap/gsap-core';
 
 const DEBUG = location.search.indexOf('debug') > -1;
@@ -67,7 +66,6 @@ const App = function () {
     if (DEBUG) {
       // Controls
       controls = new OrbitControls(camera, $canvas);
-      controls.addEventListener('change', renderRequest);
 
       // Gui
       gui = new dat.GUI();
@@ -80,20 +78,18 @@ const App = function () {
     raycaster = new THREE.Raycaster();
 
     // PmremGeneration
-    pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader();
+    // pmremGenerator = new THREE.PMREMGenerator(renderer);
+    // pmremGenerator.compileEquirectangularShader();
 
     // Setting
     setModels();
 
     // Render
-    renderRequest();
     render();
 
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        setParticle();
         window.addEventListener('scroll', onScroll);
       }
     };
@@ -123,44 +119,52 @@ const App = function () {
 
   // Setting -------------------
   const setModels = function () {
-    const gltfLoader = new GLTFLoader();
-
     models = [
       {
-        name: 'pumpkin',
-        setting: (geometry) => {},
+        name: 'cosmonaut',
+        setting: (geometry) => {
+          geometry.translate(1.65, -5, 3);
+          geometry.rotateZ(-0.25);
+          geometry.rotateX(0.2);
+        },
       },
       {
-        name: 'cat',
-        setting: (geometry) => {},
+        name: 'multiple_planets',
+        setting: (geometry) => {
+          geometry.scale(0.6, 0.6, 0.6);
+          geometry.translate(0, 2, -5);
+        },
       },
       {
-        name: 'bird',
-        setting: (geometry) => {},
+        name: 'spacestation',
+        setting: (geometry) => {
+          geometry.scale(0.008, 0.008, 0.008);
+          geometry.translate(0, -3, -1);
+          geometry.rotateX(0.5);
+        },
       },
     ];
     numModels = models.length;
     numLoadedModels = 0;
-    numMaxParticles = 0;
 
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('./resources/draco/');
+    numMaxParticles = 0;
     models.forEach((info, index) => {
-      gltfLoader.load(`./resources/models/${info.name}.glb`, (gltf) => {
-        let geometry;
-        gltf.scene.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            geometry = child.geometry;
-          }
-        });
+      dracoLoader.load(`./resources/models/clonepsy/${info.name}.drc`, (geometry) => {
         info.setting && info.setting(geometry);
 
-        console.log(geometry);
+        // console.log(geometry);
 
         info.positionsArray = geometry.getAttribute('position').array;
-        info.colorArray = geometry.setAttribute('color', new THREE.BufferAttribute(info.positionsArray.length, 3));
+        info.colorsArray = geometry.getAttribute('color').array;
 
         numMaxParticles = Math.max(geometry.getAttribute('position').count, numMaxParticles);
         numLoadedModels++;
-        numModels === numLoadedModels && setParticle();
+        if (numModels === numLoadedModels) {
+          setParticle();
+          setTimeline();
+        }
 
         geometry.dispose();
       });
@@ -168,68 +172,178 @@ const App = function () {
   };
 
   const setParticle = function () {
+    // Material
+    pointMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        u_positions1: { value: null },
+        u_positions2: { value: null },
+        u_colors1: { value: null },
+        u_colors2: { value: null },
+        u_transition: { value: 0 },
+        u_time: { value: 0 },
+        u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
+      },
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      transparent: true,
+      vertexColor: true,
+    });
+    scene.add(particleGroup);
+
+    // Geometry
     const textureSize = nearestPowerOfTwoCeil(Math.sqrt(numMaxParticles));
     const textureArraySize = textureSize * textureSize * 4;
 
-    const geometry = new THREE.BufferAttribute();
+    const geometry = new THREE.BufferGeometry();
 
     const positions = new Float32Array(textureSize * textureSize * 3);
-    for (let i = 0; i < array.length; i++) {
-      let max = textureSize * textureSize;
-
-      const element = array[i];
+    for (let max = textureSize * textureSize, i = 0; i < max; i++) {
+      positions[i * 3] = (i % textureSize) / textureSize;
+      positions[i * 3 + 1] = i / textureSize / textureSize;
     }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-    // pointMaterial = new THREE.ShaderMaterial({
-    //   uniform: {
-    //     u_positions1: { value: null },
-    //     u_positions2: { value: null },
-    //     u_colors1: { value: null },
-    //     u_colors2: { value: null },
-    //     u_transition: { value: 0 },
-    //     u_time: { value: 0 },
-    //     u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
-    //     blending: THREE.AdditiveBlending,
-    //     depthTest: false,
-    //     transparent: true,
-    //     vertexColor: true,
-    //   },
-    //   vertexShader: vertexShader,
-    //   fragmentShader: fragmentShader,
-    // });
-    // scene.add(particleGroup);
+    models.forEach((info, index) => {
+      const positions = new Float32Array(textureArraySize);
+      for (let values = info.positionsArray, i = 0, j = 0, randomPosition; i < textureArraySize; i += 4, j += 3) {
+        if (!info.positionsArray[j]) {
+          randomPosition = getSphericalRandomPosition(100);
+        }
+        positions[i] = info.positionsArray[j] || randomPosition[0];
+        positions[i + 1] = info.positionsArray[j + 1] || randomPosition[1];
+        positions[i + 2] = info.positionsArray[j + 2] || randomPosition[2];
+      }
+
+      const colors = new Float32Array(textureArraySize);
+      for (let values = info.colorsArray, i = 0, j = 0; i < textureArraySize; i += 4, j += 3) {
+        colors[i] = info.colorsArray[j] || 0;
+        colors[i + 1] = info.colorsArray[j + 1] || 0;
+        colors[i + 2] = info.colorsArray[j + 2] || 0;
+        colors[i + 3] = info.colorsArray[j] ? 1 : 0;
+      }
+
+      const shuffledAttributes = [positions, colors];
+
+      info.texturePositions = new THREE.DataTexture(shuffledAttributes[0], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
+      info.texturePositions.magFilter = THREE.NearestFilter;
+      info.texturePositions.needsUpdate = true;
+      delete info.positionsArray;
+      info.textureColors = new THREE.DataTexture(shuffledAttributes[1], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
+      info.textureColors.magFilter = THREE.NearestFilter;
+      info.textureColors.needsUpdate = true;
+      delete info.colorsArray;
+    });
+
+    pointMaterial.uniforms.u_positions1.value = models[0].texturePositions;
+    pointMaterial.uniforms.u_colors1.value = models[0].textureColors;
+
+    const indices = new Float32Array(textureSize * textureSize);
+    indices.forEach((v, i) => {
+      indices[i] = i;
+    });
+    geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1));
+
+    const sizes = new Float32Array(textureSize * textureSize);
+    sizes.forEach((v, i) => {
+      sizes[i] = Math.random() * 1.2;
+    });
+    const sizeAttributes = new THREE.BufferAttribute(sizes, 1);
+    geometry.setAttribute('size', sizeAttributes);
+
+    const mesh = new THREE.Points(geometry, pointMaterial);
+    particleInnerGroup.add(mesh);
+
+    gsap.ticker.add(animate);
   };
 
   // Scroll -------------------
   const onScroll = function () {
     const scrollTop = window.scrollY;
     const maxScrollTop = (document.body.scrollHeight || document.documentElement.scrollHeight) - wh;
-    Timeline.progress(scrollTop / maxScrollTop);
+    timeline.progress(scrollTop / maxScrollTop);
   };
 
   // Render -------------------
-  const renderRequest = function () {
-    isRequestRender = true;
-  };
-
   const render = function () {
-    if (isRequestRender) {
-      renderer.setSize(ww, wh);
-      renderer.render(scene, camera);
-    }
-    window.requestAnimationFrame(render);
+    renderer.render(scene, camera);
   };
 
+  let renderedCount = 0;
+  const animate = function (time, deltaTime, frame) {
+    if (!DEBUG || 6000 > renderedCount) {
+      pointMaterial.uniforms.u_time.value += deltaTime * 0.05;
+      particleGroup.rotation.y += deltaTime * 0.0001;
+      render();
+      renderedCount++;
+    }
+  };
+
+  // 시작 -------------------
   init();
   window.addEventListener('resize', resize);
+
+  // 함수들 -------------------
+  // https://stackoverflow.com/a/35111029
+  function nearestPowerOfTwoCeil(v) {
+    var p = 2;
+    while ((v >>= 1)) {
+      p <<= 1;
+    }
+    return p;
+  }
+
+  // https://karthikkaranth.me/blog/generating-random-points-in-a-sphere/
+  function getSphericalRandomPosition(multiplier) {
+    let u = Math.random(),
+      v = Math.random(),
+      theta = u * 2.0 * PI,
+      phi = Math.acos(2.0 * v - 1.0),
+      r = Math.cbrt(Math.random()),
+      sinPhi = Math.sin(phi);
+    return [r * sinPhi * Math.cos(theta) * multiplier, r * sinPhi * Math.sin(theta) * multiplier, r * Math.cos(phi) * multiplier];
+  }
+
+  function shuffleAttributes(arrays, itemSize) {
+    const length = arrays[0].length / itemSize;
+    const indexedArray = new Uint32Array(length);
+    for (let i = 0; i < length; i++) {
+      indexedArray[i] = i;
+    }
+    shuffle(indexedArray);
+
+    const numArrays = arrays.length;
+    const shuffledArrays = [];
+    arrays.forEach(() => {
+      shuffledArrays.push(new Float32Array(arrays[0].length));
+    });
+
+    for (let i = 0, index1, index2; i < length; i++) {
+      index1 = i * itemSize;
+      index2 = indexedArray[i] * itemSize;
+      for (let j = 0; j < numArrays; j++) {
+        for (let k = 0; k < itemSize; k++) {
+          shuffledArrays[j][index1 + k] = arrays[j][index2 + k];
+        }
+      }
+    }
+
+    return shuffledArrays;
+  }
+
+  // https://bost.ocks.org/mike/shuffle/
+  function shuffle(array) {
+    let m = array.length,
+      t,
+      i;
+    while (m) {
+      i = Math.floor(Math.random() * m--);
+      t = array[m];
+      array[m] = array[i];
+      array[i] = t;
+    }
+    return array;
+  }
 };
 window.addEventListener('load', App);
-
-// https://stackoverflow.com/a/35111029
-function nearestPowerOfTwoCeil(v) {
-  var p = 2;
-  while ((v >>= 1)) {
-    p <<= 1;
-  }
-  return p;
-}

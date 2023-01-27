@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import gsap from 'gsap';
 import dat from 'dat.gui';
 
@@ -12,34 +12,20 @@ const DEBUG = location.search.indexOf('debug') > -1;
 
 const App = function () {
   let ww, wh;
-  let renderer, scene, camera, light, controls, gui, clock, raycaster;
-  let isRequestRender = false;
+  let renderer, scene, camera, light, controls, gui, clock, raycaster, textureLoader;
+  let models;
+  let numModels = 0;
+  let numLoadedModels = 0;
+  let numMaxParticles = 0;
+  let pointMaterial;
+  let timeline;
 
-  let scrollPercent = 0;
-  let scrollPercentAcc = 0;
-  let scrollPercentAni = 0;
+  const PI = Math.PI;
+  const PI2 = PI * 2;
 
-  let geometry, material, particle;
-
-  const meshes = [];
-  const mouse = new THREE.Vector3();
-  const current = { model: '' };
-  const pointArrays = {
-    pumpkin: null,
-    cat: null,
-    bird: null,
-  };
-  const parameters = {
-    count: 50000,
-    size: 0.5,
-    radius: 5,
-    branches: 3,
-    spin: 1,
-    randomness: 0.5,
-    randomnessPower: 3,
-    insideColor: '#ff6030',
-    outsideColor: '#1b3984',
-  };
+  const particleGroup = new THREE.Group();
+  const particleInnerGroup = new THREE.Group();
+  particleGroup.add(particleInnerGroup);
 
   const $container = document.querySelector('.container');
   let $canvas;
@@ -72,7 +58,7 @@ const App = function () {
     // Controls
     if (DEBUG) {
       controls = new OrbitControls(camera, $canvas);
-      controls.addEventListener('change', renderRequest);
+      controls.addEventListener('change', render);
     }
 
     // Gui
@@ -83,22 +69,21 @@ const App = function () {
 
     // Raycaster
     raycaster = new THREE.Raycaster();
-    // raycaster.params.Points.threshold = 1; // 포인트 찍히도록 하는거
+
+    // Loader
+    textureLoader = new THREE.TextureLoader();
 
     // Setting
     setModels();
 
     // Render
-    renderRequest();
     render();
 
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        setParticle();
-        setEvents();
-
         requestScroll();
+        render();
       }
     };
   };
@@ -109,135 +94,153 @@ const App = function () {
 
   // Setting -------------------
   const setModels = function () {
-    const gltfLoader = new GLTFLoader();
+    // 모델 세팅
+    models = [
+      {
+        name: 'cat',
+        setting: (geometry) => {},
+      },
+      {
+        name: 'bird',
+        setting: (geometry) => {},
+      },
+    ];
+    numModels = models.length;
+    numLoadedModels = 0;
 
-    gltfLoader.load('./resources/models/pumpkin.glb', (gltf) => {
-      // const model = gltf.scene.children[0];
-      let model;
-      gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          model = child;
+    // 모델 로딩
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('./resources/draco/');
+
+    models.forEach((info, index) => {
+      dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
+        info.setting && info.setting(geometry);
+
+        info.positionsArray = geometry.getAttribute('position').array;
+
+        numMaxParticles = Math.max(geometry.getAttribute('position').count, numMaxParticles);
+        numLoadedModels++;
+        if (numModels === numLoadedModels) {
+          setParticle();
+          setTimeline();
+          setEvents();
         }
+
+        geometry.dispose();
       });
-      pointArrays.pumpkin = getModelGeoPositionArray(model);
-      // scene.add(model);
-      meshes.push(model);
-    });
-
-    gltfLoader.load('./resources/models/cat.glb', (gltf) => {
-      const model = gltf.scene.children[0];
-      pointArrays.cat = getModelGeoPositionArray(model);
-      // scene.add(model);
-      // meshes.push(model);
-    });
-
-    gltfLoader.load('./resources/models/bird.glb', (gltf) => {
-      const model = gltf.scene.children[0];
-      pointArrays.bird = getModelGeoPositionArray(model);
-      // scene.add(model);
-      // meshes.push(model);
     });
   };
 
   const setParticle = function () {
-    // - Geometry
-    geometry = new THREE.BufferGeometry();
-
-    const positions = pointArrays.pumpkin.slice();
-    const positionCat = pointArrays.cat.slice();
-    const randomness = new Float32Array(parameters.count * 3);
-    const scales = new Float32Array(parameters.count * 1);
-    const colors = new Float32Array(parameters.count * 3);
-
-    const colorInside = new THREE.Color(parameters.insideColor);
-    const colorOutside = new THREE.Color(parameters.outsideColor);
-
-    for (let i = 0; i < parameters.count; i++) {
-      const i3 = i * 3;
-
-      // Position
-      const radius = Math.random() * parameters.radius;
-
-      const randomX = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
-      const randomY = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
-      const randomZ = Math.pow(Math.random(), parameters.randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * parameters.randomness * radius;
-
-      randomness[i3] = randomX;
-      randomness[i3 + 1] = randomY;
-      randomness[i3 + 2] = randomZ;
-
-      // Color
-      const mixedColor = colorInside.clone();
-      mixedColor.lerp(colorOutside, radius / parameters.radius);
-
-      colors[i * 3] = mixedColor.r;
-      colors[i * 3 + 1] = mixedColor.g;
-      colors[i * 3 + 2] = mixedColor.b;
-
-      // Scale
-      scales[i] = Math.random();
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
-    geometry.setAttribute('aRandomness', new THREE.BufferAttribute(randomness, 3));
-    geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(positionCat, 3));
-
-    // - Material
-    material = new THREE.ShaderMaterial({
+    // Material
+    pointMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        u_positions1: { value: null },
+        u_positions2: { value: null },
+        u_colors1: { value: null },
+        u_colors2: { value: null },
+        u_transition: { value: 0 },
+        u_time: { value: 0 },
+        u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
+      },
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
-      uniforms: {
-        uSize: { value: 50.0 * renderer.getPixelRatio() },
-        uScroll: { value: 0 },
-        uMouse: { value: new THREE.Vector3() },
-      },
-      depthWrite: false,
-      vertexColors: true,
       blending: THREE.AdditiveBlending,
+      depthTest: false,
+      transparent: true,
+      vertexColor: true,
     });
 
-    // - Points
-    current.model = 'pumkin';
-    particle = new THREE.Points(geometry, material);
-    scene.add(particle);
-    renderRequest();
+    // Geometry
+    const geometry = new THREE.BufferGeometry();
+    const textureSize = nearestPowerOfTwoCeil(Math.sqrt(numMaxParticles));
+    const textureArraySize = textureSize * textureSize * 4; // 왜 4
+    const colorInside = new THREE.Color('#ff6030');
+    const colorOutside = new THREE.Color('#1b3984');
+
+    const positions = new Float32Array(textureSize * textureSize * 3);
+    for (let max = textureSize * textureSize, i = 0; i < max; i++) {
+      positions[i * 3] = (i % textureSize) / textureSize;
+      positions[i * 3 + 1] = i / textureSize / textureSize;
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    models.forEach((info, index) => {
+      const positions = new Float32Array(textureArraySize);
+      for (let values = info.positionsArray, i = 0, j = 0, randomPosition; i < textureArraySize; i += 4, j += 3) {
+        if (!info.positionsArray[j]) {
+          randomPosition = getSphericalRandomPosition(100);
+        }
+        positions[i] = info.positionsArray[j] || randomPosition[0];
+        positions[i + 1] = info.positionsArray[j + 1] || randomPosition[1];
+        positions[i + 2] = info.positionsArray[j + 2] || randomPosition[2];
+      }
+
+      const colors = new Float32Array(textureArraySize);
+      for (let values = info.colorsArray, i = 0; i < textureArraySize; i++) {
+        const radius = Math.random() * 5;
+        const mixedColor = colorInside.clone();
+        mixedColor.lerp(colorOutside, radius / 5);
+
+        colors[i * 3] = mixedColor.r;
+        colors[i * 3 + 1] = mixedColor.g;
+        colors[i * 3 + 2] = mixedColor.b;
+      }
+
+      const shuffledAttributes = [positions, colors];
+
+      info.texturePositions = new THREE.DataTexture(shuffledAttributes[0], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
+      info.texturePositions.magFilter = THREE.NearestFilter;
+      info.texturePositions.needsUpdate = true;
+      delete info.positionsArray;
+      info.textureColors = new THREE.DataTexture(shuffledAttributes[1], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
+      info.textureColors.magFilter = THREE.NearestFilter;
+      info.textureColors.needsUpdate = true;
+      delete info.colorsArray;
+    });
+
+    pointMaterial.uniforms.u_positions1.value = models[0].texturePositions;
+    pointMaterial.uniforms.u_colors1.value = models[0].textureColors;
+
+    const indices = new Float32Array(textureSize * textureSize);
+    indices.forEach((v, i) => {
+      indices[i] = i;
+    });
+    geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1));
+
+    const sizes = new Float32Array(textureSize * textureSize);
+    sizes.forEach((v, i) => {
+      sizes[i] = Math.random();
+    });
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    const mesh = new THREE.Points(geometry, pointMaterial);
+    particleInnerGroup.add(mesh);
+
+    scene.add(particleGroup);
   };
 
-  let ball, mesh;
   const setEvents = function () {
     window.addEventListener('scroll', requestScroll);
-
-    mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(30, 30, 30, 30), new THREE.MeshBasicMaterial({ color: 'blue', wireframe: true }));
-    // scene.add(mesh);
-
-    // ball = new THREE.Mesh(new THREE.SphereBufferGeometry(1, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }));
-    // scene.add(ball);
-
-    // console.log(meshes);
-
-    $canvas.addEventListener('mousemove', function (e) {
-      mouse.x = (e.clientX / $canvas.clientWidth) * 2 - 1;
-      mouse.y = -((e.clientY / $canvas.clientHeight) * 2 - 1);
-
-      // material.uniforms.uMouse.value = mouse;
-
-      checkIntersects();
-    });
   };
 
-  // Raycaster ----------------
-  const checkIntersects = function () {
-    raycaster.setFromCamera(mouse, camera);
+  // Timeline -------------------
+  const setTimeline = function () {
+    timeline = gsap.timeline({ paused: true, repeat: -1, yoyo: true, onUpdate: onTimelineUpdate });
+    timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 1, ease: 'cubic.inOut' });
+    timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2, ease: 'cubic.inOut' }, '<');
+    // timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 2, ease: 'cubic.inOut' });
+    // timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 2, ease: 'cubic.inOut' }, '<');
+  };
 
-    const intersects = raycaster.intersectObjects([particle]);
-
-    if (intersects[0]) {
-      console.log(intersects[0].point);
-      // ball.position.copy(intersects[0].point);
-      material.uniforms.uMouse.value = intersects[0].point;
-    }
+  const onTimelineUpdate = function () {
+    const currentIndex = Math.floor(pointMaterial.uniforms.u_transition.value);
+    const nextIndex = models[currentIndex + 1] ? currentIndex + 1 : currentIndex;
+    pointMaterial.uniforms.u_positions1.value = models[currentIndex].texturePositions;
+    pointMaterial.uniforms.u_colors1.value = models[currentIndex].textureColors;
+    pointMaterial.uniforms.u_positions2.value = models[nextIndex].texturePositions;
+    pointMaterial.uniforms.u_colors2.value = models[nextIndex].textureColors;
+    render();
   };
 
   // Scroll -------------------
@@ -248,91 +251,88 @@ const App = function () {
     const scrollTop = window.scrollY;
     const moveArea = $container.offsetHeight - wh;
     const percent = scrollTop / moveArea;
-
-    scrollPercent = percent;
-  };
-
-  // Get -------------------
-  const getModelGeoPositionArray = function (model, count, isScatter) {
-    const tempPosition = new THREE.Vector3();
-    const samplePoints = [];
-
-    let countNum = count ? count : parameters.count;
-
-    let sampler;
-    model.traverse((obj) => {
-      if (obj.isMesh) {
-        sampler = new MeshSurfaceSampler(obj).build();
-      }
-    });
-
-    for (let i = 0; i < countNum; i++) {
-      sampler.sample(tempPosition);
-      if (isScatter) {
-        const posX = tempPosition.x > 0 ? tempPosition.x + Math.random() : tempPosition.x - Math.random();
-        const posY = tempPosition.y > 0 ? tempPosition.y + Math.random() : tempPosition.y - Math.random();
-        const posZ = tempPosition.z > 0 ? tempPosition.z + Math.random() : tempPosition.z - Math.random();
-
-        samplePoints.push(posX, posY, posZ);
-      } else {
-        samplePoints.push(tempPosition.x, tempPosition.y, tempPosition.z);
-      }
-    }
-
-    const pointArray = new Float32Array(samplePoints, 3);
-    return pointArray;
+    timeline && timeline.progress(percent);
   };
 
   // Render -------------------
-  const update = function () {
-    if (scrollPercent.toFixed(3) !== scrollPercentAcc.toFixed(3)) {
-      scrollPercentAcc += (scrollPercent - scrollPercentAcc) * 0.1;
-
-      if (scrollPercentAcc < 0.5) {
-        scrollPercentAni = scrollPercentAcc * 2;
-
-        if (current.model !== 'pumkin') {
-          current.model = 'pumkin';
-
-          geometry.setAttribute('position', new THREE.BufferAttribute(pointArrays.pumpkin, 3));
-          geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(pointArrays.cat, 3));
-        }
-      } else {
-        scrollPercentAni = scrollPercentAcc * 2 - 1;
-
-        if (current.model !== 'cat') {
-          current.model = 'cat';
-
-          geometry.setAttribute('position', new THREE.BufferAttribute(pointArrays.cat, 3));
-          geometry.setAttribute('aPositionTarget', new THREE.BufferAttribute(pointArrays.bird, 3));
-        }
-      }
-      material.uniforms.uScroll.value = scrollPercentAni * 1;
-    }
-  };
-
-  const renderRequest = function () {
-    isRequestRender = true;
-  };
-
   const render = function () {
-    update();
-
-    if (isRequestRender) {
-      renderer.setSize(ww, wh);
-      renderer.render(scene, camera);
-    }
-    window.requestAnimationFrame(render);
+    renderer.render(scene, camera);
   };
 
   init();
   window.addEventListener('resize', resize);
+
+  // --------------------------------------
+  // --------------------------------------
+  // --------------------------------------
+  // 함수들 -------------------
+  // https://stackoverflow.com/a/35111029
+  function nearestPowerOfTwoCeil(v) {
+    var p = 2;
+    while ((v >>= 1)) {
+      p <<= 1;
+    }
+    return p;
+  }
+
+  // https://karthikkaranth.me/blog/generating-random-points-in-a-sphere/
+  function getSphericalRandomPosition(multiplier) {
+    let u = Math.random();
+    let v = Math.random();
+    let theta = u * 2.0 * PI;
+    let phi = Math.acos(2.0 * v - 1.0);
+    let r = Math.cbrt(Math.random());
+    let sinPhi = Math.sin(phi);
+    return [r * sinPhi * Math.cos(theta) * multiplier, r * sinPhi * Math.sin(theta) * multiplier, r * Math.cos(phi) * multiplier];
+  }
+
+  function shuffleAttributes(arrays, itemSize) {
+    const length = arrays[0].length / itemSize;
+    const indexedArray = new Uint32Array(length);
+    for (let i = 0; i < length; i++) {
+      indexedArray[i] = i;
+    }
+    shuffle(indexedArray);
+
+    const numArrays = arrays.length;
+    const shuffledArrays = [];
+    arrays.forEach(() => {
+      shuffledArrays.push(new Float32Array(arrays[0].length));
+    });
+
+    for (let i = 0, index1, index2; i < length; i++) {
+      index1 = i * itemSize;
+      index2 = indexedArray[i] * itemSize;
+      for (let j = 0; j < numArrays; j++) {
+        for (let k = 0; k < itemSize; k++) {
+          shuffledArrays[j][index1 + k] = arrays[j][index2 + k];
+        }
+      }
+    }
+
+    return shuffledArrays;
+  }
+
+  // https://bost.ocks.org/mike/shuffle/
+  function shuffle(array) {
+    let m = array.length,
+      t,
+      i;
+    while (m) {
+      i = Math.floor(Math.random() * m--);
+      t = array[m];
+      array[m] = array[i];
+      array[i] = t;
+    }
+    return array;
+  }
+
+  //
+  const getPoint = function (e) {
+    if (e.touches) {
+      e = e.touches[0] || e.changedTouches[0];
+    }
+    return [e.pageX || e.clientX, e.pageY || e.clientY];
+  };
 };
 window.addEventListener('load', App);
-
-const getPoint = function (e) {
-  if (e.touches) {
-    e = e.touches[0] || e.changedTouches[0];
-  }
-  return [e.pageX || e.clientX, e.pageY || e.clientY];
-};
