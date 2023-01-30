@@ -7,6 +7,7 @@ import dat from 'dat.gui';
 
 import vertexShader from '../shader/vertex.glsl';
 import fragmentShader from '../shader/fragment.glsl';
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler';
 
 const DEBUG = location.search.indexOf('debug') > -1;
 
@@ -129,10 +130,11 @@ const App = function () {
 
     models.forEach((info, index) => {
       dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
-        console.log(geometry);
         info.setting && info.setting(geometry);
 
-        info.positionsArray = geometry.getAttribute('position').array;
+        const samplerArray = getModelSamplerPositions(geometry);
+
+        info.positionsArray = samplerArray;
 
         numMaxParticles = Math.max(geometry.getAttribute('position').count, numMaxParticles);
         numLoadedModels++;
@@ -145,6 +147,25 @@ const App = function () {
         geometry.dispose();
       });
     });
+  };
+
+  const getModelSamplerPositions = function (geometry, count) {
+    const tempPosition = new THREE.Vector3();
+    const samplePoints = [];
+
+    let countNum = count ? count : 50000;
+
+    let sampler;
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+    sampler = new MeshSurfaceSampler(mesh).build();
+
+    for (let i = 0; i < countNum; i++) {
+      sampler.sample(tempPosition);
+      samplePoints.push(tempPosition.x, tempPosition.y, tempPosition.z);
+    }
+
+    const pointArray = new Float32Array(samplePoints, 3);
+    return pointArray;
   };
 
   const setParticle = function () {
@@ -278,7 +299,7 @@ const App = function () {
       // });
 
       particleInnerTween && particleInnerTween.kill();
-      particleInnerTween = gsap.to(particleGroup.rotation, 0.7, { x: THREE.MathUtils.degToRad(worldPosition.y * -1.2), y: THREE.MathUtils.degToRad(worldPosition.x * -1.3), ease: 'quart.out' });
+      particleInnerTween = gsap.to(particleGroup.rotation, 0.7, { x: THREE.MathUtils.degToRad(worldPosition.y * -1), y: THREE.MathUtils.degToRad(worldPosition.x * -1), ease: 'quart.out' });
     });
   };
 
