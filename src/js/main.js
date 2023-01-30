@@ -132,7 +132,9 @@ const App = function () {
       dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
         info.setting && info.setting(geometry);
 
-        const samplerArray = getModelSamplerPositions(geometry, ((index % 2) + 0.5) * 50000);
+        const samplerCount = (1 + Math.random()).toFixed(2);
+        console.log(samplerCount);
+        const samplerArray = getModelSamplerPositions(geometry, samplerCount * 50000);
         info.positionsArray = samplerArray;
 
         numMaxParticles = Math.max(samplerArray.length, numMaxParticles);
@@ -190,8 +192,6 @@ const App = function () {
       vertexColor: true,
     });
 
-    console.log(numMaxParticles);
-
     // Geometry
     const geometry = new THREE.BufferGeometry();
     const textureSize = nearestPowerOfTwoCeil(Math.sqrt(numMaxParticles));
@@ -218,7 +218,8 @@ const App = function () {
       }
 
       const colors = new Float32Array(textureArraySize);
-      for (let values = info.colorsArray, i = 0; i < ((index % 2) + 0.5) * 50000 * 3; i += 3) {
+      console.log(info.positionsArray.length);
+      for (let values = info.colorsArray, i = 0; i < info.positionsArray.length; i += 3) {
         const radius = Math.random() * 5;
         const mixedColor = colorInside.clone();
         mixedColor.lerp(colorOutside, radius / 5);
