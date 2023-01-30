@@ -49,7 +49,7 @@ const App = function () {
 
     // Camera
     camera = new THREE.PerspectiveCamera(70, ww / wh, 0.1, 1000);
-    camera.position.set(0, 0, 50);
+    camera.position.set(0, 0, 30);
     scene.add(camera);
 
     // Light

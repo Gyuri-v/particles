@@ -51,8 +51,8 @@ const App = function () {
     $container.appendChild($canvas);
 
     // Camera
-    camera = new THREE.PerspectiveCamera(70, ww / wh, 0.1, 1000);
-    camera.position.set(0, 0, 30);
+    camera = new THREE.PerspectiveCamera(24, ww / wh, 1, 999);
+    camera.position.set(0, 0, 50);
     scene.add(camera);
 
     // Light
@@ -90,7 +90,6 @@ const App = function () {
     // Loading
     THREE.DefaultLoadingManager.onProgress = function (url, itemsLoaded, itemsTotal) {
       if (itemsLoaded === itemsTotal) {
-        window.addEventListener('scroll', onScroll);
       }
     };
   };
@@ -164,6 +163,7 @@ const App = function () {
         if (numModels === numLoadedModels) {
           setParticle();
           setTimeline();
+          setEvent();
         }
 
         geometry.dispose();
@@ -181,7 +181,10 @@ const App = function () {
         u_colors2: { value: null },
         u_transition: { value: 0 },
         u_time: { value: 0 },
-        u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
+        u_pointer: { value: new THREE.Vector3(-10, -10, -10) },
+        u_pointerRadius: { value: 1 },
+
+        // u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
       },
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
@@ -258,6 +261,42 @@ const App = function () {
     gsap.ticker.add(animate);
   };
 
+  const setEvent = function () {
+    // Scroll
+    window.addEventListener('scroll', onScroll);
+
+    // Mouse
+    const mouseSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(pointMaterial.uniforms.u_pointerRadius.value, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.15 }),
+    );
+    scene.add(mouseSphere);
+
+    const followMouseSphere = () => {
+      mouseSphere.position.copy(pointMaterial.uniforms.u_pointer.value);
+      mouseSphere.scale.set(1, 1, 1);
+      mouseSphere.scale.multiplyScalar(pointMaterial.uniforms.u_pointerRadius.value);
+    };
+
+    let pointerTween, pointerScaleTween;
+    document.documentElement.addEventListener('mousemove', (e) => {
+      const worldPosition = getWorldPositionFromScreenPosition(e.clientX, e.clientY);
+
+      pointerTween && pointerTween.kill();
+      pointerTween = gsap.to(pointMaterial.uniforms.u_pointer.value, 0.7, { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z, ease: 'quart.out', onUpdate: followMouseSphere });
+
+      pointerScaleTween && pointerScaleTween.kill();
+      pointerScaleTween = gsap.to(pointMaterial.uniforms.u_pointerRadius, 0.3, {
+        value: 2,
+        ease: 'quart.out',
+        onUpdate: followMouseSphere,
+        onComplete: () => {
+          pointerScaleTween = gsap.to(pointMaterial.uniforms.u_pointerRadius, 1.5, { value: 1, ease: 'quad.out', onUpdate: followMouseSphere });
+        },
+      });
+    });
+  };
+
   // Scroll -------------------
   const onScroll = function () {
     const scrollTop = window.scrollY;
@@ -285,6 +324,20 @@ const App = function () {
   window.addEventListener('resize', resize);
 
   // 함수들 -------------------
+
+  // https://stackoverflow.com/questions/13055214/mouse-canvas-x-y-to-three-js-world-x-y-z
+  const getWorldPositionFromScreenPosition = (function () {
+    const vector = new THREE.Vector3();
+    const position = new THREE.Vector3();
+    return (x, y) => {
+      vector.set((x / ww) * 2 - 1, -(y / wh) * 2 + 1, 0.5);
+      vector.unproject(camera);
+      vector.sub(camera.position).normalize();
+      position.copy(camera.position).add(vector.multiplyScalar(-camera.position.z / vector.z));
+      return new THREE.Vector3().copy(position);
+    };
+  })();
+
   // https://stackoverflow.com/a/35111029
   function nearestPowerOfTwoCeil(v) {
     var p = 2;

@@ -1,7 +1,9 @@
-uniform sampler2D u_pointTexture;
+// uniform sampler2D u_pointTexture;
 
 varying vec4 v_color;
 
 void main() {
-  gl_FragColor = v_color * texture2D(u_pointTexture, gl_PointCoord);
+  vec2 uv = gl_PointCoord - 0.5;
+  float circle = step(length(uv), 0.5);
+  gl_FragColor = vec4(vec3(circle), 1.0) * v_color;
 }

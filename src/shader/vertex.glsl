@@ -35,14 +35,13 @@ void main() {
   // - mouse
 	vec3 difference = _position - u_mouse;
 	vec3 direction = normalize(difference);
-	float distance = length(_position.xy - u_mouse.xy);
-	if (distance < u_mouseRadius) {
-		float force = clamp((u_mouseRadius / 2.0) / pow(distance, 3.0), 0.0, u_mouseRadius / 2.0);
+	// float distance = length(_position.xy - u_mouse.xy);
+	if (displace < u_mouseRadius) {
+		float force = clamp((u_mouseRadius / 2.0) / pow(displace, 3.0), 0.0, u_mouseRadius / 2.0);
 		_position += direction * force;
 	}
 
 	vec4 mvPosition = viewMatrix * vec4(_position, 1.0);
-
 	gl_Position = projectionMatrix * mvPosition;
 
   // Size

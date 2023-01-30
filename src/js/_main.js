@@ -5,8 +5,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import gsap from 'gsap';
 import dat from 'dat.gui';
 
-import vertexShader from '../shader/vertex.glsl';
-import fragmentShader from '../shader/fragment.glsl';
+import vertexShader from '../shader/_vertex.glsl';
+import fragmentShader from '../shader/_fragment.glsl';
 
 const DEBUG = location.search.indexOf('debug') > -1;
 
@@ -234,7 +234,7 @@ const App = function () {
     const intersects = raycaster.intersectObjects([particle]);
 
     if (intersects[0]) {
-      console.log(intersects[0].point);
+      // console.log(intersects[0].point);
       // ball.position.copy(intersects[0].point);
       material.uniforms.uMouse.value = intersects[0].point;
     }
