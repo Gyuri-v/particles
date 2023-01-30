@@ -132,11 +132,10 @@ const App = function () {
       dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
         info.setting && info.setting(geometry);
 
-        const samplerArray = getModelSamplerPositions(geometry);
-
+        const samplerArray = getModelSamplerPositions(geometry, ((index % 2) + 0.5) * 50000);
         info.positionsArray = samplerArray;
 
-        numMaxParticles = Math.max(geometry.getAttribute('position').count, numMaxParticles);
+        numMaxParticles = Math.max(samplerArray.length, numMaxParticles);
         numLoadedModels++;
         if (numModels === numLoadedModels) {
           setParticle();
@@ -153,9 +152,10 @@ const App = function () {
     const tempPosition = new THREE.Vector3();
     const samplePoints = [];
 
-    let countNum = count ? count : 50000;
+    let countNum = count ? count : parameters.count;
 
     let sampler;
+
     const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
     sampler = new MeshSurfaceSampler(mesh).build();
 
@@ -190,6 +190,8 @@ const App = function () {
       vertexColor: true,
     });
 
+    console.log(numMaxParticles);
+
     // Geometry
     const geometry = new THREE.BufferGeometry();
     const textureSize = nearestPowerOfTwoCeil(Math.sqrt(numMaxParticles));
@@ -216,14 +218,14 @@ const App = function () {
       }
 
       const colors = new Float32Array(textureArraySize);
-      for (let values = info.colorsArray, i = 0; i < textureArraySize; i++) {
+      for (let values = info.colorsArray, i = 0; i < ((index % 2) + 0.5) * 50000 * 3; i += 3) {
         const radius = Math.random() * 5;
         const mixedColor = colorInside.clone();
         mixedColor.lerp(colorOutside, radius / 5);
 
-        colors[i * 3] = mixedColor.r;
-        colors[i * 3 + 1] = mixedColor.g;
-        colors[i * 3 + 2] = mixedColor.b;
+        colors[i] = mixedColor.r;
+        colors[i + 1] = mixedColor.g;
+        colors[i + 2] = mixedColor.b;
       }
 
       const shuffledAttributes = [positions, colors];
