@@ -19,6 +19,7 @@ const App = function () {
   let numMaxParticles = 0;
   let pointMaterial;
   let timeline;
+  let mouse = new THREE.Vector2();
 
   const PI = Math.PI;
   const PI2 = PI * 2;
@@ -48,7 +49,7 @@ const App = function () {
 
     // Camera
     camera = new THREE.PerspectiveCamera(70, ww / wh, 0.1, 1000);
-    camera.position.set(0, 0, 30);
+    camera.position.set(0, 0, 50);
     scene.add(camera);
 
     // Light
@@ -146,6 +147,8 @@ const App = function () {
         u_colors2: { value: null },
         u_transition: { value: 0 },
         u_time: { value: 0 },
+        u_mouse: { value: new THREE.Vector3(-10, -10, -10) },
+        u_mouseRadius: { value: 1 },
         u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
       },
       vertexShader: vertexShader,
@@ -227,7 +230,43 @@ const App = function () {
   };
 
   const setEvents = function () {
+    // Scroll
     window.addEventListener('scroll', requestScroll);
+
+    // Mouse move
+
+    let mouseSphere;
+    let pointerTween;
+    let pointerScaleTween;
+    mouseSphere = new THREE.Mesh(new THREE.SphereGeometry(pointMaterial.uniforms.u_mouseRadius.value, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }));
+    scene.add(mouseSphere);
+
+    const followMouseSphere = function () {
+      mouseSphere.position.copy(pointMaterial.uniforms.u_mouse.value);
+      mouseSphere.scale.set(1, 1, 1);
+      mouseSphere.scale.multiplyScalar(pointMaterial.uniforms.u_mouseRadius.value);
+      render();
+    };
+
+    document.documentElement.addEventListener('mousemove', function (e) {
+      // mouse.x = (e.clientX / $canvas.clientWidth) * 2 - 1;
+      // mouse.y = -((e.clientY / $canvas.clientHeight) * 2 - 1);
+
+      const worldPosition = getWorldPositionFromScreenPosition(e.clientX, e.clientY);
+
+      pointerTween && pointerTween.kill();
+      pointerTween = gsap.to(pointMaterial.uniforms.u_mouse.value, 0.7, { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z, ease: 'quart.out', onUpdate: followMouseSphere });
+
+      pointerScaleTween && pointerScaleTween.kill();
+      pointerScaleTween = gsap.to(pointMaterial.uniforms.u_mouseRadius, 0.3, {
+        value: 2,
+        ease: 'quart.out',
+        onUpdate: followMouseSphere,
+        onComplete: () => {
+          pointerScaleTween = gsap.to(pointMaterial.uniforms.u_mouseRadius, 1.5, { value: 1, ease: 'quad.out', onUpdate: followMouseSphere });
+        },
+      });
+    });
   };
 
   // Timeline -------------------
@@ -261,14 +300,13 @@ const App = function () {
   };
 
   // Animation -------------------
-  let renderedCount = 0;
+  // let renderedCount = 0;
   const animate = function (time, deltaTime, frame) {
-    if (6000 > renderedCount) {
-      pointMaterial.uniforms.u_time.value += deltaTime * 0.05;
-      particleInnerGroup.rotation.y += deltaTime * 0.0001;
-      render();
-      renderedCount++;
-    }
+    // if (6000 > renderedCount) {
+    pointMaterial.uniforms.u_time.value += deltaTime * 0.05;
+    render();
+    // renderedCount++;
+    // }
   };
 
   // Render -------------------
@@ -283,6 +321,20 @@ const App = function () {
   // --------------------------------------
   // --------------------------------------
   // 함수들 -------------------
+
+  // https://stackoverflow.com/questions/13055214/mouse-canvas-x-y-to-three-js-world-x-y-z
+  const getWorldPositionFromScreenPosition = (function () {
+    const vector = new THREE.Vector3();
+    const position = new THREE.Vector3();
+    return (x, y) => {
+      vector.set((x / ww) * 2 - 1, -(y / wh) * 2 + 1, 0.5);
+      vector.unproject(camera);
+      vector.sub(camera.position).normalize();
+      position.copy(camera.position).add(vector.multiplyScalar(-camera.position.z / vector.z));
+      return new THREE.Vector3().copy(position);
+    };
+  })();
+
   // https://stackoverflow.com/a/35111029
   function nearestPowerOfTwoCeil(v) {
     var p = 2;
