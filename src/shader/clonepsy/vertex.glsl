@@ -35,10 +35,10 @@ void main() {
 
   vec3 difference = _position - u_pointer;
   vec3 direction = normalize(difference);
-  // float distance = length(_position.xy - u_pointer.xy);
+  float distance = length(_position.xy - u_pointer.xy);
 
-  if ( displace < u_pointerRadius ) {
-    float force = clamp((u_pointerRadius / 2.0) / pow(displace, 3.0), 0.0, u_pointerRadius / 2.0);
+  if ( distance < u_pointerRadius ) {
+    float force = clamp((u_pointerRadius / 2.0) / pow(distance, 3.0), 0.0, u_pointerRadius / 2.0);
     _position += direction * force;
   }
 

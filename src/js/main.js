@@ -48,8 +48,8 @@ const App = function () {
     $container.appendChild($canvas);
 
     // Camera
-    camera = new THREE.PerspectiveCamera(70, ww / wh, 0.1, 1000);
-    camera.position.set(0, 0, 30);
+    camera = new THREE.PerspectiveCamera(24, ww / wh, 1, 999);
+    camera.position.set(0, 0, 50);
     scene.add(camera);
 
     // Light
@@ -64,6 +64,10 @@ const App = function () {
 
     // Gui
     gui = new dat.GUI();
+
+    // Axes
+    const axesHelper = new THREE.AxesHelper(3);
+    scene.add(axesHelper);
 
     // Clock
     clock = new THREE.Clock();
@@ -99,15 +103,21 @@ const App = function () {
     models = [
       {
         name: 'cat',
-        setting: (geometry) => {},
+        setting: (geometry) => {
+          geometry.scale(0.5, 0.5, 0.5);
+        },
       },
       {
         name: 'bird',
-        setting: (geometry) => {},
+        setting: (geometry) => {
+          geometry.scale(0.5, 0.5, 0.5);
+        },
       },
       {
         name: 'horse',
-        setting: (geometry) => {},
+        setting: (geometry) => {
+          geometry.scale(0.5, 0.5, 0.5);
+        },
       },
     ];
     numModels = models.length;
@@ -147,9 +157,9 @@ const App = function () {
         u_colors2: { value: null },
         u_transition: { value: 0 },
         u_time: { value: 0 },
-        u_mouse: { value: new THREE.Vector3(-10, -10, -10) },
+        u_mouse: { value: new THREE.Vector3(0, 0, 0) },
         u_mouseRadius: { value: 1 },
-        u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
+        // u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
       },
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
@@ -218,7 +228,7 @@ const App = function () {
 
     const sizes = new Float32Array(textureSize * textureSize);
     sizes.forEach((v, i) => {
-      sizes[i] = Math.random() * 0.5;
+      sizes[i] = Math.random() * 1.2;
     });
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
@@ -234,38 +244,41 @@ const App = function () {
     window.addEventListener('scroll', requestScroll);
 
     // Mouse move
-
-    let mouseSphere;
+    let mouseSphere, followMouseSphere;
     let pointerTween;
     let pointerScaleTween;
-    mouseSphere = new THREE.Mesh(new THREE.SphereGeometry(pointMaterial.uniforms.u_mouseRadius.value, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }));
-    scene.add(mouseSphere);
+    let particleInnerTween;
 
-    const followMouseSphere = function () {
-      mouseSphere.position.copy(pointMaterial.uniforms.u_mouse.value);
-      mouseSphere.scale.set(1, 1, 1);
-      mouseSphere.scale.multiplyScalar(pointMaterial.uniforms.u_mouseRadius.value);
-      render();
-    };
+    if (DEBUG) {
+      mouseSphere = new THREE.Mesh(new THREE.SphereGeometry(pointMaterial.uniforms.u_mouseRadius.value, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }));
+      scene.add(mouseSphere);
+
+      followMouseSphere = function () {
+        mouseSphere.position.copy(pointMaterial.uniforms.u_mouse.value);
+        mouseSphere.scale.set(1, 1, 1);
+        mouseSphere.scale.multiplyScalar(pointMaterial.uniforms.u_mouseRadius.value);
+        render();
+      };
+    }
 
     document.documentElement.addEventListener('mousemove', function (e) {
-      // mouse.x = (e.clientX / $canvas.clientWidth) * 2 - 1;
-      // mouse.y = -((e.clientY / $canvas.clientHeight) * 2 - 1);
-
       const worldPosition = getWorldPositionFromScreenPosition(e.clientX, e.clientY);
 
       pointerTween && pointerTween.kill();
       pointerTween = gsap.to(pointMaterial.uniforms.u_mouse.value, 0.7, { x: worldPosition.x, y: worldPosition.y, z: worldPosition.z, ease: 'quart.out', onUpdate: followMouseSphere });
 
-      pointerScaleTween && pointerScaleTween.kill();
-      pointerScaleTween = gsap.to(pointMaterial.uniforms.u_mouseRadius, 0.3, {
-        value: 2,
-        ease: 'quart.out',
-        onUpdate: followMouseSphere,
-        onComplete: () => {
-          pointerScaleTween = gsap.to(pointMaterial.uniforms.u_mouseRadius, 1.5, { value: 1, ease: 'quad.out', onUpdate: followMouseSphere });
-        },
-      });
+      // pointerScaleTween && pointerScaleTween.kill();
+      // pointerScaleTween = gsap.to(pointMaterial.uniforms.u_mouseRadius, 0.3, {
+      //   value: 2,
+      //   ease: 'quart.out',
+      //   onUpdate: followMouseSphere,
+      //   onComplete: () => {
+      //     pointerScaleTween = gsap.to(pointMaterial.uniforms.u_mouseRadius, 1.5, { value: 1, ease: 'quad.out', onUpdate: followMouseSphere });
+      //   },
+      // });
+
+      particleInnerTween && particleInnerTween.kill();
+      particleInnerTween = gsap.to(particleGroup.rotation, 0.7, { x: THREE.MathUtils.degToRad(worldPosition.y), y: THREE.MathUtils.degToRad(worldPosition.x), ease: 'quart.out' });
     });
   };
 
@@ -300,13 +313,10 @@ const App = function () {
   };
 
   // Animation -------------------
-  // let renderedCount = 0;
   const animate = function (time, deltaTime, frame) {
-    // if (6000 > renderedCount) {
     pointMaterial.uniforms.u_time.value += deltaTime * 0.05;
+    // particleGroup.rotation.y += deltaTime * 0.0001;
     render();
-    // renderedCount++;
-    // }
   };
 
   // Render -------------------
@@ -396,7 +406,7 @@ const App = function () {
     return array;
   }
 
-  //
+  // getPoint
   const getPoint = function (e) {
     if (e.touches) {
       e = e.touches[0] || e.changedTouches[0];

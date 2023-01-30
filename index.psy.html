@@ -1,523 +1,595 @@
+
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Particles - use data texture</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="format-detection" content="telephone=no" />
-    <style>
-      html,
-      body {
-        height: 100%;
-      }
-      body {
-        margin: 0;
-        padding: 0;
-      }
-      .buttons {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        padding: 10px;
-      }
-
-      canvas.webgl {
-        position: fixed;
-        left: 0;
-        right: 0;
-        top: 0;
-        height: 100vh;
-      }
-
-      #wrap {
-      }
-      #wrap section {
-        height: 500vh;
-      }
-    </style>
-  </head>
-
-  <body>
-    <div id="wrap">
-      <section></section>
-      <section></section>
-      <section></section>
-      <section></section>
-      <section></section>
-    </div>
-
-    <script type="x-shader/x-vertex" id="vertex-shader">
-      #define PI 3.141592653589793
-      #define PI2 6.283185307179586
-
-      attribute float index;
-      attribute float size;
-
-      uniform sampler2D u_positions1;
-      uniform sampler2D u_positions2;
-      uniform sampler2D u_colors1;
-      uniform sampler2D u_colors2;
-
-      uniform float u_transition;
-      uniform float u_time;
-
-      varying vec4 v_color;
-
-      void main() {
-      	float progress = fract(u_transition);
-
-      	vec3 _position1 = texture2D(u_positions1, position.xy).xyz;
-      	vec3 _position2 = texture2D(u_positions2, position.xy).xyz;
-      	vec3 _position = mix(_position1, _position2, progress);
-      	vec4 color = mix(texture2D(u_colors1, position.xy), texture2D(u_colors2, position.xy), progress);
-
-      	// float _distance = distance(_position1, _position2);
-      	// vec3 rotatedPosition = vec3(cos(progress * PI2) * _distance + position.x, _position.y, sin(progress * PI2) * _distance + position.z);
-      	// _position += rotatedPosition * sin(progress * PI);
-      	// _position += 1.0 - rotatedPosition * sin(progress * PI);
-
-      	v_color = color;
-      	// v_color = vec4(1.0);
-
-      	float displace = cos(index + u_time / 10.0) / 10.0;
-      	vec4 mvPosition = modelViewMatrix * vec4(_position.x, _position.y + displace, _position.z, 1.0);
-
-      	gl_Position = projectionMatrix * mvPosition;
-      	gl_PointSize = size * ( 300.0 / -mvPosition.z );
-      }
-    </script>
-
-    <script type="x-shader/x-fragment" id="fragment-shader">
-      uniform sampler2D u_pointTexture;
-
-      varying vec4 v_color;
-
-      void main() {
-      	gl_FragColor = v_color * texture2D(u_pointTexture, gl_PointCoord);
-      }
-    </script>
-    <script src="./resources/r138/three.min.js"></script>
-    <!-- <script src="./resources/GLTFLoader.js"></script> -->
-    <script src="./resources/r138/DRACOLoader.js"></script>
-    <!-- <script src="./resources/RGBELoader.js"></script> -->
-    <script src="./resources/r138/OrbitControls.js"></script>
-    <script src="./resources/dat.gui.min.js"></script>
-    <script src="./resources/stats.min.js"></script>
-    <script src="./resources/gsap.min.js"></script>
-    <script>
-      (function () {
-        window._DEBUG = location.search.indexOf('debug') > -1 ? {} : null;
-        window._DEBUG && document.documentElement.classList.add('_DEBUG');
-
-        const isRandomed = location.search.indexOf('randomed') > -1;
-        const isAutoplay = location.search.indexOf('autoplay') > -1;
-
-        const PI = Math.PI;
-        const PI2 = PI * 2;
-
-        let areaWidth = window.innerWidth;
-        let areaHeight = window.innerHeight;
-
-        const $sections = [].slice.call(document.querySelectorAll('#wrap > section'));
-        const numSections = $sections.length;
-
-        const particleGroup = new THREE.Group();
-        const particleInnerGroup = new THREE.Group();
-        particleGroup.add(particleInnerGroup);
-
-        let positionAttributes = null;
-
-        const scene = new THREE.Scene();
-
-        const camera = new THREE.PerspectiveCamera(24, areaWidth / areaHeight, 1, 999);
-        camera.position.set(0, 0, 50);
-
-        const renderer = new THREE.WebGL1Renderer({ antialias: true, alpha: false });
-        // renderer.setClearColor(0xeeeeee);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.outputEncoding = THREE.LinearEncoding;
-        renderer.toneMapping = THREE.LinearToneMapping;
-        renderer.domElement.classList.add('webgl');
-        document.body.appendChild(renderer.domElement);
-
-        if (window._DEBUG) {
-          _DEBUG.control = new THREE.OrbitControls(camera, renderer.domElement);
-          _DEBUG.control.enableZoom = false;
-          _DEBUG.control.addEventListener('change', render);
-
-          _DEBUG.gui = new dat.GUI();
-
-          _DEBUG.stats = new Stats();
-          document.body.appendChild(_DEBUG.stats.dom);
-
-          scene.add(new THREE.AxesHelper(8));
-        }
-
-        const textureLoader = new THREE.TextureLoader();
-
-        const dotMaterial = new THREE.ShaderMaterial({
-          uniforms: {
-            u_positions1: {
-              value: null,
-            },
-            u_positions2: {
-              value: null,
-            },
-            u_colors1: {
-              value: null,
-            },
-            u_colors2: {
-              value: null,
-            },
-            u_transition: {
-              value: 0,
-            },
-            u_time: {
-              value: 0,
-            },
-            u_pointTexture: {
-              value: textureLoader.load('./resources/dot.png'),
-            },
-          },
-          vertexShader: document.getElementById('vertex-shader').textContent,
-          fragmentShader: document.getElementById('fragment-shader').textContent,
-
-          blending: THREE.AdditiveBlending,
-          depthTest: false,
-          transparent: true,
-          vertexColors: true,
-        });
-
-        const onTimelineUpdate = () => {
-          const currentIndex = Math.floor(dotMaterial.uniforms.u_transition.value);
-          const nextIndex = models[currentIndex + 1] ? currentIndex + 1 : currentIndex;
-          dotMaterial.uniforms.u_positions1.value = models[currentIndex].texturePositions;
-          dotMaterial.uniforms.u_colors1.value = models[currentIndex].textureColors;
-          dotMaterial.uniforms.u_positions2.value = models[nextIndex].texturePositions;
-          dotMaterial.uniforms.u_colors2.value = models[nextIndex].textureColors;
-        };
-
-        const timeline = gsap.timeline({ paused: !isAutoplay, repeat: -1, yoyo: true, onUpdate: onTimelineUpdate });
-        timeline.to(dotMaterial.uniforms.u_transition, 5, { value: 1, ease: 'cubic.inOut' });
-        timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2, ease: 'cubic.inOut' }, '<');
-        timeline.to(dotMaterial.uniforms.u_transition, 5, { value: 2, ease: 'cubic.inOut' });
-        timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 2, ease: 'cubic.inOut' }, '<');
-        timeline.to(dotMaterial.uniforms.u_transition, 5, { value: 3, ease: 'cubic.inOut' });
-        timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 3, ease: 'cubic.inOut' }, '<');
-        timeline.to(dotMaterial.uniforms.u_transition, 5, { value: 4, ease: 'cubic.inOut' });
-        timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 4, ease: 'cubic.inOut' }, '<');
-        const timelineDuration = timeline.totalDuration();
-
-        if (window._DEBUG) {
-          _DEBUG.gui.add(dotMaterial.uniforms.u_transition, 'value', 0, 4, 0.0001).name('transition').listen().onChange(onTimelineUpdate);
-          _DEBUG.gui.add(
-            {
-              play: () => {
-                renderedCount = 0;
-                timeline.play(0);
-              },
-            },
-            'play',
-          );
-        }
-
-        window.addEventListener('scroll', () => {
-          const scrollTop = window.pageYOffset;
-          const maxScrollTop = (document.body.scrollHeight || document.documentElement.scrollHeight) - areaHeight;
-          // console.log(window.pageYOffset, maxScrollTop, timeline.totalDuration());
-          timeline.progress(scrollTop / maxScrollTop);
-        });
-        window.addEventListener('resize', resize);
-        resize();
-
-        // scene.add(new THREE.AmbientLight(0xffffff, 1));
-
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
-
-        // new THREE.RGBELoader()
-        // 	// .setDataType(THREE.UnsignedByteType)
-        // 	.load('./resources/hdr/photos_2017_7_14_fst_night-space-sky-milky-way.hdr', function(texture) {
-        // 		const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-        // 		scene.background = envMap;
-        // 		// scene.environment = envMap;
-        // 		texture.dispose();
-        // 		pmremGenerator.dispose();
-        // 	});
-
-        const backgroundSphere = new THREE.Mesh(
-          new THREE.SphereGeometry(35, 35, 16, 32),
-          new THREE.MeshBasicMaterial({
-            color: 0x000000,
-            side: THREE.BackSide,
-            // map: textureLoader.load('./resources/background/galaxy-space-textured-background.jpg',
-            // map: textureLoader.load('./resources/background/galaxy-panorama-000.jpeg',
-            // map: textureLoader.load('./resources/background/photos_2018_4_10_fst_milkyway-universe.jpg',
-            map: textureLoader.load('./resources/background/outer-space-background.jpg', function () {
-              gsap.to(backgroundSphere.material.color, 5, { r: 0.7, g: 0.7, b: 0.7 });
-            }),
-            // transparent: true,
-            // opacity: 0.5
-          }),
-        );
-        // backgroundSphere.material.map.minFilter = THREE.NearestFilter;
-        // backgroundSphere.material.map.magFilter = THREE.NearestFilter;
-        particleGroup.add(backgroundSphere);
-
-        scene.add(particleGroup);
-
-        const models = [
-          // {
-          // 	name: 'file',
-          // 	setting: (geometry) => {
-          // 		geometry.scale(0.1, 0.1, 0.1);
-          // 	}
-          // },
-          {
-            name: 'cosmonaut',
-            setting: (geometry) => {
-              geometry.translate(1.65, -5, 3);
-              geometry.rotateZ(-0.25);
-              geometry.rotateX(0.2);
-            },
-          },
-          {
-            name: 'multiple_planets',
-            setting: (geometry) => {
-              geometry.scale(0.6, 0.6, 0.6);
-              geometry.translate(0, 2, -5);
-            },
-          },
-          {
-            name: 'spacestation',
-            setting: (geometry) => {
-              geometry.scale(0.008, 0.008, 0.008);
-              geometry.translate(0, -3, -1);
-              geometry.rotateX(0.5);
-            },
-          },
-          {
-            name: 'capital_ship',
-            setting: (geometry) => {
-              geometry.scale(0.75, 0.75, 0.75);
-              geometry.rotateX(-2.3);
-              geometry.translate(0, 0.7, 0);
-            },
-          },
-          {
-            name: 'council_of_peace',
-            setting: (geometry) => {
-              geometry.scale(1.35, 1.35, 1.35);
-              geometry.translate(0, 1, 0);
-              // geometry.rotateX(0.1);
-            },
-          },
-        ];
-        const numModels = models.length;
-        let numLoadedModels = 0;
-
-        const dracoLoader = new THREE.DRACOLoader();
-        dracoLoader.setDecoderPath('./resources/draco/');
-
-        let numMaxParticles = 0;
-        models.forEach((info, index) => {
-          dracoLoader.load('./resources/drc/' + info.name + '.drc', (geometry) => {
-            info.setting && info.setting(geometry);
-
-            // console.log(geometry);
-
-            info.positionsArray = geometry.getAttribute('position').array;
-            info.colorsArray = geometry.getAttribute('color').array;
-
-            // console.log(index, geometry.getAttribute('position').count);
-            numMaxParticles = Math.max(geometry.getAttribute('position').count, numMaxParticles);
-
-            numLoadedModels++;
-
-            numModels === numLoadedModels && initialize();
-
-            geometry.dispose();
-          });
-        });
-
-        function initialize() {
-          console.log('init', numMaxParticles);
-
-          const textureSize = nearestPowerOfTwoCeil(Math.sqrt(numMaxParticles));
-          const textureArraySize = textureSize * textureSize * 4;
-
-          const geometry = new THREE.BufferGeometry();
-
-          // required
-          // for use position.xy as uv
-          const positions = new Float32Array(textureSize * textureSize * 3);
-          for (let max = textureSize * textureSize, i = 0; i < max; i++) {
-            positions[i * 3] = (i % textureSize) / textureSize;
-            positions[i * 3 + 1] = i / textureSize / textureSize;
-          }
-          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-          // console.log(textureSize, textureSize * textureSize, positions, positions.length, geometry.attributes.position.count)
-
-          models.forEach((info, index) => {
-            const positions = new Float32Array(textureArraySize);
-            for (let values = info.positionsArray, i = 0, j = 0, randomPosition; i < textureArraySize; i += 4, j += 3) {
-              if (!info.positionsArray[j]) {
-                randomPosition = getSphericalRandomPosition(isRandomed ? 5 : 100);
-              }
-              positions[i] = info.positionsArray[j] || randomPosition[0];
-              positions[i + 1] = info.positionsArray[j + 1] || randomPosition[1];
-              positions[i + 2] = info.positionsArray[j + 2] || randomPosition[2];
-            }
-
-            const colors = new Float32Array(textureArraySize);
-            for (let values = info.colorsArray, i = 0, j = 0; i < textureArraySize; i += 4, j += 3) {
-              colors[i] = info.colorsArray[j] || 0;
-              colors[i + 1] = info.colorsArray[j + 1] || 0;
-              colors[i + 2] = info.colorsArray[j + 2] || 0;
-              colors[i + 3] = info.colorsArray[j] ? 1 : 0;
-            }
-
-            const shuffledAttributes = isRandomed ? shuffleAttributes([positions, colors], 4) : [positions, colors];
-
-            info.texturePositions = new THREE.DataTexture(shuffledAttributes[0], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
-            info.texturePositions.magFilter = THREE.NearestFilter;
-            info.texturePositions.needsUpdate = true;
-            delete info.positionsArray;
-            info.textureColors = new THREE.DataTexture(shuffledAttributes[1], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
-            info.textureColors.magFilter = THREE.NearestFilter;
-            info.textureColors.needsUpdate = true;
-            delete info.colorsArray;
-
-            // console.log(index, positions, colors);
-
-            // data texture test
-            // const dd = new THREE.Mesh(
-            // 	new THREE.PlaneGeometry(5, 5),
-            // 	new THREE.MeshBasicMaterial({ color: 0xffffff, map: info.texturePositions, transparent: true })
-            // );
-            // dd.position.z = - index * 5;
-            // // scene.add(dd);
-          });
-
-          dotMaterial.uniforms.u_positions1.value = models[0].texturePositions;
-          dotMaterial.uniforms.u_colors1.value = models[0].textureColors;
-          // dotMaterial.uniforms.u_positions2.value = models[1].texturePositions;
-          // dotMaterial.uniforms.u_colors2.value = models[1].textureColors;
-
-          const indices = new Float32Array(textureSize * textureSize);
-          indices.forEach((v, i) => {
-            indices[i] = i;
-          });
-          geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1));
-
-          const sizes = new Float32Array(textureSize * textureSize);
-          sizes.forEach((v, i) => {
-            sizes[i] = Math.random() * 1.2;
-          });
-          const sizeAttributes = new THREE.BufferAttribute(sizes, 1);
-          geometry.setAttribute('size', sizeAttributes);
-
-          // console.log(geometry.attributes);
-
-          const mesh = new THREE.Points(geometry, dotMaterial);
-          particleInnerGroup.add(mesh);
-
-          gsap.ticker.add(animate);
-
-          dracoLoader.dispose();
-        }
-
-        // https://stackoverflow.com/a/35111029
-        function nearestPowerOfTwoCeil(v) {
-          var p = 2;
-          while ((v >>= 1)) {
-            p <<= 1;
-          }
-          return p;
-        }
-
-        // https://karthikkaranth.me/blog/generating-random-points-in-a-sphere/
-        function getSphericalRandomPosition(multiplier) {
-          let u = Math.random(),
-            v = Math.random(),
-            theta = u * 2.0 * PI,
-            phi = Math.acos(2.0 * v - 1.0),
-            r = Math.cbrt(Math.random()),
-            sinPhi = Math.sin(phi);
-          return [r * sinPhi * Math.cos(theta) * multiplier, r * sinPhi * Math.sin(theta) * multiplier, r * Math.cos(phi) * multiplier];
-        }
-
-        function shuffleAttributes(arrays, itemSize) {
-          const length = arrays[0].length / itemSize;
-          const indexedArray = new Uint32Array(length);
-          for (let i = 0; i < length; i++) {
-            indexedArray[i] = i;
-          }
-          shuffle(indexedArray);
-
-          const numArrays = arrays.length;
-          const shuffledArrays = [];
-          arrays.forEach(() => {
-            shuffledArrays.push(new Float32Array(arrays[0].length));
-          });
-
-          for (let i = 0, index1, index2; i < length; i++) {
-            index1 = i * itemSize;
-            index2 = indexedArray[i] * itemSize;
-            for (let j = 0; j < numArrays; j++) {
-              for (let k = 0; k < itemSize; k++) {
-                shuffledArrays[j][index1 + k] = arrays[j][index2 + k];
-              }
-            }
-          }
-
-          return shuffledArrays;
-        }
-
-        // https://bost.ocks.org/mike/shuffle/
-        function shuffle(array) {
-          let m = array.length,
-            t,
-            i;
-          while (m) {
-            i = Math.floor(Math.random() * m--);
-            t = array[m];
-            array[m] = array[i];
-            array[i] = t;
-          }
-          return array;
-        }
-
-        function resize() {
-          areaWidth = window.innerWidth;
-          areaHeight = window.innerHeight;
-
-          camera.aspect = areaWidth / areaHeight;
-          camera.updateProjectionMatrix();
-
-          renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
-          renderer.setSize(areaWidth, areaHeight);
-        }
-
-        let renderedCount = 0;
-        function animate(time, deltaTime, frame) {
-          if (!window._DEBUG || 6000 > renderedCount) {
-            window._DEBUG && _DEBUG.stats && _DEBUG.stats.update();
-
-            dotMaterial.uniforms.u_time.value += deltaTime * 0.05;
-            particleGroup.rotation.y += deltaTime * 0.0001;
-            render();
-            renderedCount++;
-          }
-        }
-
-        function render() {
-          renderer.render(scene, camera);
-        }
-      })();
-    </script>
-  </body>
+
+<head>
+<meta charset="UTF-8" />
+<title>Particles - use data texture</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="format-detection" content="telephone=no">
+<style>
+html, body {height: 100%;}
+body {margin: 0; padding: 0;}
+.buttons {position: absolute; right: 0; bottom: 0; padding: 10px;}
+
+canvas.webgl {position: fixed; left: 0; right: 0; top: 0; height: 100vh;}
+
+#wrap {}
+#wrap section {height: 500vh;}
+</style>
+</head>
+
+<body>
+
+<div id="wrap">
+	<section></section>
+	<section></section>
+	<section></section>
+	<section></section>
+	<section></section>
+</div>
+
+<script type="x-shader/x-vertex" id="vertex-shader">
+#define PI 3.141592653589793
+#define PI2 6.283185307179586
+
+attribute float index;
+attribute float size;
+
+uniform sampler2D u_positions1;
+uniform sampler2D u_positions2;
+uniform sampler2D u_colors1;
+uniform sampler2D u_colors2;
+
+uniform float u_transition;
+uniform float u_time;
+
+uniform vec3 u_pointer;
+uniform float u_pointerRadius;
+uniform float u_groupRotation;
+
+varying vec4 v_color;
+
+void main() {
+	float progress = fract(u_transition);
+
+	vec3 _position1 = texture2D(u_positions1, position.xy).xyz;
+	vec3 _position2 = texture2D(u_positions2, position.xy).xyz;
+	vec3 _position = mix(_position1, _position2, progress);
+	vec4 color = mix(texture2D(u_colors1, position.xy), texture2D(u_colors2, position.xy), progress);
+
+	v_color = color;
+	// v_color = vec4(1.0);
+
+	float displace = cos(index + u_time / 10.0) / 10.0;
+	_position = (modelMatrix * vec4(_position.x, _position.y + displace, _position.z, 1.0)).xyz;
+
+	// https://stackoverflow.com/questions/66136122/push-particles-away-from-mouseposition-in-glsl-and-three-js
+	vec3 difference = _position - u_pointer;
+	vec3 direction = normalize(difference);
+	float distance = length(_position.xy - u_pointer.xy);
+	if (distance < u_pointerRadius) {
+		float force = clamp((u_pointerRadius / 2.0) / pow(distance, 3.0), 0.0, u_pointerRadius / 2.0);
+		_position += direction * force;
+	}
+
+	vec4 mvPosition = viewMatrix * vec4(_position, 1.0);
+
+	gl_Position = projectionMatrix * mvPosition;
+	gl_PointSize = size * ( 300.0 / -mvPosition.z );
+}
+</script>
+
+<script type="x-shader/x-fragment" id="fragment-shader">
+// uniform sampler2D u_pointTexture;
+
+varying vec4 v_color;
+
+void main() {
+	// gl_FragColor = v_color * texture2D(u_pointTexture, gl_PointCoord);
+	vec2 uv = gl_PointCoord - 0.5;
+	float circle = step(length(uv), 0.5);
+	gl_FragColor = vec4(vec3(circle), 1.0) * v_color;
+}
+</script>
+<script src="./resources/r138/three.min.js"></script>
+<!-- <script src="./resources/GLTFLoader.js"></script> -->
+<script src="./resources/r138/DRACOLoader.js"></script>
+<!-- <script src="./resources/RGBELoader.js"></script> -->
+<script src="./resources/r138/OrbitControls.js"></script>
+<script src="./resources/dat.gui.min.js"></script>
+<script src="./resources/stats.min.js"></script>
+<script src="./resources/gsap.min.js"></script>
+<script>
+(function() {
+
+	window._DEBUG = location.search.indexOf('debug') > -1 ? {} : null;
+	window._DEBUG && document.documentElement.classList.add('_DEBUG');
+
+	const isRandomed = location.search.indexOf('randomed') > -1;
+	const isAutoplay = location.search.indexOf('autoplay') > -1;
+
+	const PI = Math.PI;
+	const PI2 = PI * 2;
+
+	let areaWidth = window.innerWidth;
+	let areaHeight = window.innerHeight;
+
+	const $sections = [].slice.call(document.querySelectorAll('#wrap > section'));
+	const numSections = $sections.length;
+
+
+	const particleGroup = new THREE.Group();
+	const particleInnerGroup = new THREE.Group();
+	particleGroup.add(particleInnerGroup);
+
+	let positionAttributes = null;
+
+
+	const scene = new THREE.Scene();
+
+	const camera = new THREE.PerspectiveCamera(24, areaWidth / areaHeight, 1, 999);
+	camera.position.set(0, 0, 50);
+
+	const renderer = new THREE.WebGL1Renderer({ antialias: true, alpha: false });
+	// renderer.setClearColor(0xeeeeee);
+	renderer.setSize(window.innerWidth, window.innerHeight);
+	renderer.outputEncoding = THREE.LinearEncoding;
+	renderer.toneMapping = THREE.LinearToneMapping;
+	renderer.domElement.classList.add('webgl');
+	document.body.appendChild(renderer.domElement);
+
+
+	if (window._DEBUG) {
+		_DEBUG.control = new THREE.OrbitControls(camera, renderer.domElement);
+		// _DEBUG.control.enableZoom = false;
+		_DEBUG.control.addEventListener('change', render);
+
+		_DEBUG.gui = new dat.GUI();
+
+		_DEBUG.stats = new Stats();
+		document.body.appendChild(_DEBUG.stats.dom);
+
+		scene.add(new THREE.AxesHelper(8));
+	}
+
+	const textureLoader = new THREE.TextureLoader();
+
+
+	const dotMaterial = new THREE.ShaderMaterial({
+		uniforms: {
+			u_positions1: {
+				value: null
+			},
+			u_positions2: {
+				value: null
+			},
+			u_colors1: {
+				value: null
+			},
+			u_colors2: {
+				value: null
+			},
+			u_transition: {
+				value: 0
+			},
+			u_time: {
+				value: 0
+			},
+			u_pointer: {
+				value: new THREE.Vector3(-10, -10, -10)
+			},
+			u_pointerRadius: {
+				value: 1
+			},
+			u_groupRotation: {
+				value: 0
+			},
+			// u_pointTexture: {
+			// 	value:  textureLoader.load('./resources/dot.png')
+			// }
+		},
+		vertexShader: document.getElementById('vertex-shader').textContent,
+		fragmentShader: document.getElementById('fragment-shader').textContent,
+
+		blending: THREE.AdditiveBlending,
+		depthTest: false,
+		transparent: true,
+		vertexColors: true
+	});
+
+	const onTimelineUpdate = () => {
+		const currentIndex = Math.floor(dotMaterial.uniforms.u_transition.value);
+		const nextIndex = models[currentIndex + 1] ? currentIndex + 1 : currentIndex;
+		dotMaterial.uniforms.u_positions1.value = models[currentIndex].texturePositions;
+		dotMaterial.uniforms.u_colors1.value = models[currentIndex].textureColors;
+		dotMaterial.uniforms.u_positions2.value = models[nextIndex].texturePositions;
+		dotMaterial.uniforms.u_colors2.value = models[nextIndex].textureColors;
+	};
+
+	const timeline = gsap.timeline({ paused: !isAutoplay, repeat: -1, yoyo: true, onUpdate: onTimelineUpdate });
+	timeline.to(dotMaterial.uniforms.u_transition, 5, {value: 1, ease: 'cubic.inOut'});
+	timeline.to(particleInnerGroup.rotation, 5.5, {y: PI2, ease: 'cubic.inOut'}, '<');
+	timeline.to(dotMaterial.uniforms.u_transition, 5, {value: 2, ease: 'cubic.inOut'});
+	timeline.to(particleInnerGroup.rotation, 5.5, {y: PI2 * 2, ease: 'cubic.inOut'}, '<');
+	timeline.to(dotMaterial.uniforms.u_transition, 5, {value: 3, ease: 'cubic.inOut'});
+	timeline.to(particleInnerGroup.rotation, 5.5, {y: PI2 * 3, ease: 'cubic.inOut'}, '<');
+	timeline.to(dotMaterial.uniforms.u_transition, 5, {value: 4, ease: 'cubic.inOut'});
+	timeline.to(particleInnerGroup.rotation, 5.5, {y: PI2 * 4, ease: 'cubic.inOut'}, '<');
+	const timelineDuration = timeline.totalDuration();
+
+	if (window._DEBUG) {
+		_DEBUG.gui.add(dotMaterial.uniforms.u_transition, 'value', 0, 4, 0.0001).name('transition').listen().onChange(onTimelineUpdate);
+		_DEBUG.gui.add({play: () => {
+			renderedCount = 0;
+			timeline.play(0);
+		}}, 'play');
+	}
+
+
+	window.addEventListener('scroll', () => {
+		const scrollTop = window.pageYOffset;
+		const maxScrollTop = (document.body.scrollHeight || document.documentElement.scrollHeight) - areaHeight;
+		// console.log(window.pageYOffset, maxScrollTop, timeline.totalDuration());
+		timeline.progress(scrollTop / maxScrollTop);
+	});
+	window.addEventListener('resize', resize);
+	resize();
+
+
+	// scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+
+	const pmremGenerator = new THREE.PMREMGenerator(renderer);
+	pmremGenerator.compileEquirectangularShader();
+
+	// new THREE.RGBELoader()
+	// 	// .setDataType(THREE.UnsignedByteType)
+	// 	.load('./resources/hdr/photos_2017_7_14_fst_night-space-sky-milky-way.hdr', function(texture) {
+	// 		const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+	// 		scene.background = envMap;
+	// 		// scene.environment = envMap;
+	// 		texture.dispose();
+	// 		pmremGenerator.dispose();
+	// 	});
+
+	const backgroundSphere = new THREE.Mesh(
+		new THREE.SphereGeometry(35, 35, 16, 32),
+		new THREE.MeshBasicMaterial({
+			color: 0x000000,
+			side: THREE.BackSide,
+			// map: textureLoader.load('./resources/background/galaxy-space-textured-background.jpg',
+			// map: textureLoader.load('./resources/background/galaxy-panorama-000.jpeg',
+			// map: textureLoader.load('./resources/background/photos_2018_4_10_fst_milkyway-universe.jpg',
+			map: textureLoader.load('./resources/background/outer-space-background2.jpg',
+			// map: textureLoader.load('./resources/background/Spherical_textures_19_spherical_bump.jpg',
+			// map: textureLoader.load('./resources/background/cube-grid.png',
+			// map: textureLoader.load('./resources/background/01-3.jpg',
+			// map: textureLoader.load('./resources/background/366c6046e5a0ab35ff0ed6d6d5e330c6.png',
+			// map: textureLoader.load('./resources/background/912126200612e11d2c26a201b1996c9b94526e4a.png',
+			// map: textureLoader.load('./resources/background/222.png',
+			// map: textureLoader.load('./resources/background/Stellarium3.jpg',
+				function () {
+					gsap.to(backgroundSphere.material.color, 5, { r: 1, g: 1, b: 1 });
+				}
+			),
+			// transparent: true,
+			// opacity: 0.5
+		})
+	);
+	backgroundSphere.material.map.minFilter = THREE.NearestFilter;
+	backgroundSphere.material.map.magFilter = THREE.NearestFilter;
+	particleGroup.add(backgroundSphere);
+
+	scene.add(particleGroup);
+
+
+	const models = [
+		// {
+		// 	name: 'file',
+		// 	setting: (geometry) => {
+		// 		geometry.scale(0.1, 0.1, 0.1);
+		// 	}
+		// },
+		{
+			name: 'cosmonaut',
+			setting: (geometry) => {
+				geometry.translate(1.65, -5, 3);
+				geometry.rotateZ(-0.25);
+				geometry.rotateX(0.2);
+			}
+		},
+		{
+			name: 'multiple_planets',
+			setting: (geometry) => {
+				geometry.scale(0.6, 0.6, 0.6);
+				geometry.translate(0, 2, -5);
+			}
+		},
+		{
+			name: 'spacestation',
+			setting: (geometry) => {
+				geometry.scale(0.008, 0.008, 0.008);
+				geometry.translate(0, -3, -1);
+				geometry.rotateX(0.5);
+			}
+		},
+		{
+			name: 'capital_ship',
+			setting: (geometry) => {
+				geometry.scale(0.75, 0.75, 0.75);
+				geometry.rotateX(-2.3);
+				geometry.translate(0, 0.7, 0);
+			}
+		},
+		{
+			name: 'council_of_peace',
+			setting: (geometry) => {
+				geometry.scale(1.35, 1.35, 1.35);
+				geometry.translate(0, 1, 0);
+				// geometry.rotateX(0.1);
+			}
+		}
+	];
+	const numModels = models.length;
+	let numLoadedModels = 0;
+
+	const dracoLoader = new THREE.DRACOLoader();
+	dracoLoader.setDecoderPath('./resources/draco/');
+
+	let numMaxParticles = 0;
+	models.forEach((info, index) => {
+		dracoLoader.load('./resources/drc/' + info.name + '.drc', (geometry) => {
+			info.setting && info.setting(geometry);
+
+			// console.log(geometry);
+
+			info.positionsArray = geometry.getAttribute('position').array;
+			info.colorsArray = geometry.getAttribute('color').array;
+
+			// console.log(index, geometry.getAttribute('position').count);
+			numMaxParticles = Math.max(geometry.getAttribute('position').count, numMaxParticles);
+
+			numLoadedModels++;
+
+			numModels === numLoadedModels && initialize();
+
+			geometry.dispose();
+		});
+	});
+
+	function initialize () {
+
+		console.log('init', numMaxParticles);
+
+		const textureSize = nearestPowerOfTwoCeil(Math.sqrt(numMaxParticles));
+		const textureArraySize = textureSize * textureSize * 4;
+
+		const geometry = new THREE.BufferGeometry();
+
+		// required
+		// for use position.xy as uv
+		const positions = new Float32Array(textureSize * textureSize * 3);
+		for (let max = textureSize * textureSize, i = 0; i < max; i++) {
+			positions[i * 3] = i % textureSize / textureSize;
+			positions[i * 3 + 1] = i / textureSize / textureSize;
+		}
+		geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+		// console.log(textureSize, textureSize * textureSize, positions, positions.length, geometry.attributes.position.count)
+
+		models.forEach((info, index) => {
+			const positions = new Float32Array(textureArraySize);
+			for (let values = info.positionsArray, i = 0, j = 0, randomPosition; i < textureArraySize; i += 4, j += 3) {
+				if (!info.positionsArray[j]) {
+					randomPosition = getSphericalRandomPosition(isRandomed ? 5 : 100);
+				}
+				positions[i] = info.positionsArray[j] || randomPosition[0];
+				positions[i + 1] = info.positionsArray[j + 1] || randomPosition[1];
+				positions[i + 2] = info.positionsArray[j + 2] || randomPosition[2];
+			}
+
+			const colors = new Float32Array(textureArraySize);
+			for (let values = info.colorsArray, i = 0, j = 0; i < textureArraySize; i += 4, j += 3) {
+				colors[i] = info.colorsArray[j] || 0;
+				colors[i + 1] = info.colorsArray[j + 1] || 0;
+				colors[i + 2] = info.colorsArray[j + 2] || 0;
+				colors[i + 3] = info.colorsArray[j] ? 1 : 0;
+			}
+
+			const shuffledAttributes = isRandomed ? shuffleAttributes([positions, colors], 4) : [positions, colors];
+
+			info.texturePositions = new THREE.DataTexture(shuffledAttributes[0], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
+			info.texturePositions.magFilter = THREE.NearestFilter;
+			info.texturePositions.needsUpdate = true;
+			delete info.positionsArray;
+			info.textureColors = new THREE.DataTexture(shuffledAttributes[1], textureSize, textureSize, THREE.RGBAFormat, THREE.FloatType);
+			info.textureColors.magFilter = THREE.NearestFilter;
+			info.textureColors.needsUpdate = true;
+			delete info.colorsArray;
+
+			// console.log(index, positions, colors);
+			
+			// data texture test
+			// const dd = new THREE.Mesh(
+			// 	new THREE.PlaneGeometry(5, 5),
+			// 	new THREE.MeshBasicMaterial({ color: 0xffffff, map: info.texturePositions, transparent: true })
+			// );
+			// dd.position.z = - index * 5;
+			// // scene.add(dd);
+		});
+
+		dotMaterial.uniforms.u_positions1.value = models[0].texturePositions;
+		dotMaterial.uniforms.u_colors1.value = models[0].textureColors;
+		// dotMaterial.uniforms.u_positions2.value = models[1].texturePositions;
+		// dotMaterial.uniforms.u_colors2.value = models[1].textureColors;
+
+		const indices = new Float32Array(textureSize * textureSize);
+		indices.forEach((v, i) => {
+			indices[i] = i;
+		});
+		geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1));
+
+		const sizes = new Float32Array(textureSize * textureSize);
+		sizes.forEach((v, i) => {
+			sizes[i] = Math.random() * 1.2;
+		});
+		const sizeAttributes = new THREE.BufferAttribute(sizes, 1);
+		geometry.setAttribute('size', sizeAttributes);
+
+		// console.log(geometry.attributes);
+
+		const mesh = new THREE.Points(geometry, dotMaterial);
+		particleInnerGroup.add(mesh);
+
+
+		// interaction
+		(function () {
+			let mouseSphere, followMouseSphere;
+			if (window._DEBUG) {
+				mouseSphere = new THREE.Mesh(
+					new THREE.SphereGeometry(dotMaterial.uniforms.u_pointerRadius.value, 8, 8),
+					new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true, transparent: true, opacity: 0.15 })
+				);
+				scene.add(mouseSphere);
+
+				followMouseSphere = () => {
+					mouseSphere.position.copy(dotMaterial.uniforms.u_pointer.value);
+					mouseSphere.scale.set(1, 1, 1);
+					mouseSphere.scale.multiplyScalar(dotMaterial.uniforms.u_pointerRadius.value);
+				};
+			}
+
+			let pointerTween, pointerScaleTween;
+			document.documentElement.addEventListener('mousemove', (e) => {
+				const worldPosition = getWorldPositionFromScreenPosition(e.clientX, e.clientY);
+				// dotMaterial.uniforms.u_pointer.value.copy(worldPosition);
+				// mouseSphere && mouseSphere.position.copy(dotMaterial.uniforms.u_pointer.value);
+				pointerTween && pointerTween.kill();
+				pointerTween = gsap.to(dotMaterial.uniforms.u_pointer.value, 0.7, {x: worldPosition.x, y: worldPosition.y, z: worldPosition.z, ease: 'quart.out', onUpdate: followMouseSphere});
+				pointerScaleTween && pointerScaleTween.kill();
+				pointerScaleTween = gsap.to(dotMaterial.uniforms.u_pointerRadius, 0.3, {value: 2, ease: 'quart.out', onUpdate: followMouseSphere, onComplete: () => {
+					pointerScaleTween = gsap.to(dotMaterial.uniforms.u_pointerRadius, 1.5, {value: 1, ease: 'quad.out', onUpdate: followMouseSphere});
+				}});
+			});
+		})();
+
+		gsap.ticker.add(animate);
+
+		dracoLoader.dispose();
+	}
+
+	// https://stackoverflow.com/questions/13055214/mouse-canvas-x-y-to-three-js-world-x-y-z
+	const getWorldPositionFromScreenPosition = (function () {
+		const vector = new THREE.Vector3();
+		const position = new THREE.Vector3();
+		return (x, y) => {
+			vector.set((x / areaWidth) * 2 - 1, -(y / areaHeight) * 2 + 1, 0.5);
+			vector.unproject(camera);
+			vector.sub(camera.position).normalize();
+			position.copy(camera.position).add(vector.multiplyScalar(-camera.position.z / vector.z));
+			return new THREE.Vector3().copy(position);
+		}
+	})();
+
+	// https://stackoverflow.com/a/35111029
+	function nearestPowerOfTwoCeil (v) {
+		var p = 2;
+		while (v >>= 1) {
+			p <<= 1;
+		}
+		return p;
+	}
+
+	// https://karthikkaranth.me/blog/generating-random-points-in-a-sphere/
+	function getSphericalRandomPosition (multiplier) {
+	    let u = Math.random(),
+	    	v = Math.random(),
+	    	theta = u * 2.0 * PI,
+	    	phi = Math.acos(2.0 * v - 1.0),
+	    	r = Math.cbrt(Math.random()),
+	    	sinPhi = Math.sin(phi);
+	    return [
+	    	r * sinPhi * Math.cos(theta) * multiplier,
+	    	r * sinPhi * Math.sin(theta) * multiplier,
+	    	r * Math.cos(phi) * multiplier
+	    ];
+	};
+
+	function shuffleAttributes(arrays, itemSize) {
+		const length = arrays[0].length / itemSize;
+		const indexedArray = new Uint32Array(length);
+		for (let i = 0; i < length; i++) {
+			indexedArray[i] = i;
+		}
+		shuffle(indexedArray);
+
+		const numArrays = arrays.length;
+		const shuffledArrays = [];
+		arrays.forEach(() => {
+			shuffledArrays.push(new Float32Array(arrays[0].length));
+		});
+
+		for (let i = 0, index1, index2; i < length; i++) {
+			index1 = i * itemSize;
+			index2 = indexedArray[i] * itemSize;
+			for (let j = 0; j < numArrays; j++) {
+				for (let k = 0; k < itemSize; k++) {
+					shuffledArrays[j][index1 + k] = arrays[j][index2 + k];
+				}
+			}
+		}
+
+		return shuffledArrays;
+	}
+
+	// https://bost.ocks.org/mike/shuffle/
+	function shuffle(array) {
+		let m = array.length, t, i;
+		while (m) {
+			i = Math.floor(Math.random() * m--);
+			t = array[m];
+			array[m] = array[i];
+			array[i] = t;
+		}
+		return array;
+	}
+
+	function resize() {
+		areaWidth = window.innerWidth;
+		areaHeight = window.innerHeight;
+
+		camera.aspect = areaWidth / areaHeight;
+		camera.updateProjectionMatrix();
+
+		renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+		renderer.setSize(areaWidth, areaHeight);
+	}
+
+
+	let renderedCount = 0;
+	function animate(time, deltaTime, frame) {
+		if (!window._DEBUG || 6000 > renderedCount) {
+			window._DEBUG && _DEBUG.stats && _DEBUG.stats.update();
+
+			particleGroup.rotation.y += deltaTime * 0.0001;
+			// particleGroup.rotation.y = PI;
+
+			dotMaterial.uniforms.u_time.value += deltaTime * 0.05;
+			dotMaterial.uniforms.u_groupRotation.value = particleGroup.rotation.y;
+
+			render();
+			renderedCount++;
+		}
+	}
+
+	function render() {
+        renderer.render(scene, camera);
+	}
+
+})();
+</script>
+</body>
 </html>

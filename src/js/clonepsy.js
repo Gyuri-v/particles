@@ -81,6 +81,10 @@ const App = function () {
     // pmremGenerator = new THREE.PMREMGenerator(renderer);
     // pmremGenerator.compileEquirectangularShader();
 
+    // Axes
+    const axesHelper = new THREE.AxesHelper(3);
+    scene.add(axesHelper);
+
     // Setting
     setModels();
 
@@ -313,7 +317,7 @@ const App = function () {
   const animate = function (time, deltaTime, frame) {
     if (!DEBUG || 6000 > renderedCount) {
       pointMaterial.uniforms.u_time.value += deltaTime * 0.05;
-      particleGroup.rotation.y += deltaTime * 0.0001;
+      // particleGroup.rotation.y += deltaTime * 0.0001;
       render();
       renderedCount++;
     }

@@ -35,7 +35,7 @@ void main() {
   // - mouse
 	vec3 difference = _position - u_mouse;
 	vec3 direction = normalize(difference);
-	// float distance = length(_position.xy - u_mouse.xy);
+	float distance = length(_position.xy - u_mouse.xy);
 	if (displace < u_mouseRadius) {
 		float force = clamp((u_mouseRadius / 2.0) / pow(displace, 3.0), 0.0, u_mouseRadius / 2.0);
 		_position += direction * force;
