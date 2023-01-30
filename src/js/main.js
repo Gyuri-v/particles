@@ -41,7 +41,7 @@ const App = function () {
 
     // Renderer
     renderer = new THREE.WebGL1Renderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor('#000', 1.0);
     renderer.setSize(ww, wh);
     $canvas = renderer.domElement;
@@ -158,8 +158,8 @@ const App = function () {
         u_transition: { value: 0 },
         u_time: { value: 0 },
         u_mouse: { value: new THREE.Vector3(0, 0, 0) },
-        u_mouseRadius: { value: 1 },
-        // u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
+        u_mouseRadius: { value: 1.5 },
+        u_pointTexture: { value: textureLoader.load('./resources/textures/dot.png') },
       },
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
@@ -228,7 +228,7 @@ const App = function () {
 
     const sizes = new Float32Array(textureSize * textureSize);
     sizes.forEach((v, i) => {
-      sizes[i] = Math.random() * 1.2;
+      sizes[i] = Math.random() * renderer.getPixelRatio() * 0.5;
     });
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
@@ -278,7 +278,7 @@ const App = function () {
       // });
 
       particleInnerTween && particleInnerTween.kill();
-      particleInnerTween = gsap.to(particleGroup.rotation, 0.7, { x: THREE.MathUtils.degToRad(worldPosition.y), y: THREE.MathUtils.degToRad(worldPosition.x), ease: 'quart.out' });
+      particleInnerTween = gsap.to(particleGroup.rotation, 0.7, { x: THREE.MathUtils.degToRad(worldPosition.y * -1.2), y: THREE.MathUtils.degToRad(worldPosition.x * -1.3), ease: 'quart.out' });
     });
   };
 
