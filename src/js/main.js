@@ -50,7 +50,7 @@ const App = function () {
 
     // Camera
     camera = new THREE.PerspectiveCamera(24, ww / wh, 1, 999);
-    camera.position.set(0, 0, 50);
+    camera.position.set(0, 0, 80);
     scene.add(camera);
 
     // Light
@@ -103,6 +103,15 @@ const App = function () {
     // 모델 세팅
     models = [
       {
+        name: 'dragon',
+        setting: (geometry) => {
+          geometry.scale(0.6, 0.6, 0.6);
+          geometry.rotateX(-1.7);
+          geometry.rotateY(0.6);
+          geometry.translate(0, -10, 0);
+        },
+      },
+      {
         name: 'cat',
         setting: (geometry) => {
           geometry.scale(0.5, 0.5, 0.5);
@@ -132,8 +141,8 @@ const App = function () {
       dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
         info.setting && info.setting(geometry);
 
-        const samplerCount = (1 + Math.random()).toFixed(2);
-        console.log(samplerCount);
+        const samplerCount = (1 + Math.random() * 5).toFixed(2);
+        // const samplerCount = 1 + index * 2;
         const samplerArray = getModelSamplerPositions(geometry, samplerCount * 50000);
         info.positionsArray = samplerArray;
 
@@ -207,6 +216,7 @@ const App = function () {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     models.forEach((info, index) => {
+      console.log(textureArraySize);
       const positions = new Float32Array(textureArraySize);
       for (let values = info.positionsArray, i = 0, j = 0, randomPosition; i < textureArraySize; i += 4, j += 3) {
         if (!info.positionsArray[j]) {
@@ -302,7 +312,7 @@ const App = function () {
       // });
 
       particleInnerTween && particleInnerTween.kill();
-      particleInnerTween = gsap.to(particleGroup.rotation, 0.7, { x: THREE.MathUtils.degToRad(worldPosition.y * -1), y: THREE.MathUtils.degToRad(worldPosition.x * -1), ease: 'quart.out' });
+      particleInnerTween = gsap.to(particleGroup.rotation, 2, { x: THREE.MathUtils.degToRad(worldPosition.y * -1.5), y: THREE.MathUtils.degToRad(worldPosition.x * -1), ease: 'quart.out' });
     });
   };
 
