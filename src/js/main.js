@@ -103,18 +103,26 @@ const App = function () {
     // 모델 세팅
     models = [
       {
-        name: 'dragon',
+        name: 'fairyTowerC',
         setting: (geometry) => {
-          geometry.scale(0.6, 0.6, 0.6);
+          geometry.scale(0.5, 0.5, 0.5);
+          geometry.translate(0, -10, 0);
+        },
+      },
+      {
+        name: 'dragon',
+        counts: 15,
+        setting: (geometry) => {
+          geometry.scale(0.5, 0.5, 0.5);
           geometry.rotateX(-1.7);
           geometry.rotateY(0.6);
           geometry.translate(0, -10, 0);
         },
       },
       {
-        name: 'cat',
+        name: 'mouse',
         setting: (geometry) => {
-          geometry.scale(0.5, 0.5, 0.5);
+          geometry.scale(2, 2, 2);
         },
       },
       {
@@ -124,11 +132,24 @@ const App = function () {
         },
       },
       {
-        name: 'horse',
+        name: 'rabbit',
+        setting: (geometry) => {
+          geometry.scale(0.3, 0.3, 0.3);
+          geometry.translate(0, -7, 0);
+        },
+      },
+      {
+        name: 'cat',
         setting: (geometry) => {
           geometry.scale(0.5, 0.5, 0.5);
         },
       },
+      // {
+      //   name: 'horse',
+      //   setting: (geometry) => {
+      //     geometry.scale(0.5, 0.5, 0.5);
+      //   },
+      // },
     ];
     numModels = models.length;
     numLoadedModels = 0;
@@ -141,10 +162,12 @@ const App = function () {
       dracoLoader.load(`./resources/models/draco/${info.name}.drc`, (geometry) => {
         info.setting && info.setting(geometry);
 
-        const samplerCount = (1 + Math.random() * 5).toFixed(2);
         // const samplerCount = 1 + index * 2;
+        const samplerCount = models[index].counts ? models[index].counts : (1 + Math.random() * 3).toFixed(2);
         const samplerArray = getModelSamplerPositions(geometry, samplerCount * 50000);
         info.positionsArray = samplerArray;
+
+        console.log('aa', geometry);
 
         numMaxParticles = Math.max(samplerArray.length, numMaxParticles);
         numLoadedModels++;
@@ -216,7 +239,6 @@ const App = function () {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     models.forEach((info, index) => {
-      console.log(textureArraySize);
       const positions = new Float32Array(textureArraySize);
       for (let values = info.positionsArray, i = 0, j = 0, randomPosition; i < textureArraySize; i += 4, j += 3) {
         if (!info.positionsArray[j]) {
@@ -228,7 +250,6 @@ const App = function () {
       }
 
       const colors = new Float32Array(textureArraySize);
-      console.log(info.positionsArray.length);
       for (let values = info.colorsArray, i = 0; i < info.positionsArray.length; i += 3) {
         const radius = Math.random() * 5;
         const mixedColor = colorInside.clone();
@@ -323,6 +344,10 @@ const App = function () {
     timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2, ease: 'cubic.inOut' }, '<');
     timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 2, ease: 'cubic.inOut' });
     timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 2, ease: 'cubic.inOut' }, '<');
+    timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 3, ease: 'cubic.inOut' });
+    timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 3, ease: 'cubic.inOut' }, '<');
+    timeline.to(pointMaterial.uniforms.u_transition, 5, { value: 4, ease: 'cubic.inOut' });
+    timeline.to(particleInnerGroup.rotation, 5.5, { y: PI2 * 4, ease: 'cubic.inOut' }, '<');
   };
 
   const onTimelineUpdate = function () {
