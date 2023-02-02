@@ -117,8 +117,6 @@ const App = function () {
       gltf.scene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           model = child;
-
-          console.log(model.material.color);
         }
       });
       pointArrays.pumpkin = getModelGeoPositionArray(model);
@@ -128,11 +126,6 @@ const App = function () {
 
     gltfLoader.load('./resources/models/cat.glb', (gltf) => {
       const model = gltf.scene.children[0];
-      gltf.scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          console.log(child.material.color);
-        }
-      });
       pointArrays.cat = getModelGeoPositionArray(model);
       // scene.add(model);
       // meshes.push(model);
